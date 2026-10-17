@@ -7,6 +7,9 @@ const url=new URL(process.env.DATABASE_URL);
 // Honor the TLS mode configured in DATABASE_URL using PostgreSQL semantics.
 url.searchParams.set('uselibpqcompat','true');
 if(!url.searchParams.has('sslmode'))url.searchParams.set('sslmode','verify-full');
+import {demoPatients} from './demo-data.mjs';
+import {ADDED_COLUMNS} from './psv.mjs';
+
 export const pool=new pg.Pool({connectionString:url.toString(),max:5,connectionTimeoutMillis:10000,query_timeout:15000});
 pool.on('error',()=>console.error('Database pool connection interrupted'));
 export async function initialize(){
@@ -22,6 +25,9 @@ export async function initialize(){
  CREATE TABLE IF NOT EXISTS septisense.alerts(id uuid PRIMARY KEY, prediction_id uuid NOT NULL REFERENCES septisense.predictions(id), encounter_id text NOT NULL REFERENCES septisense.encounters(id), run_id uuid NOT NULL, status text NOT NULL DEFAULT 'open', created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(encounter_id,run_id));
  CREATE TABLE IF NOT EXISTS septisense.alert_events(id uuid PRIMARY KEY, alert_id uuid NOT NULL REFERENCES septisense.alerts(id), created_at timestamptz NOT NULL DEFAULT now(), event_type text NOT NULL, actor text NOT NULL DEFAULT 'demo-user');`);
  await c.query("SELECT create_hypertable('septisense.observations', by_range('observed_at'), if_not_exists => TRUE)");
+ // Typed columns for the rest of the PSV dataset. Only missing columns are added; existing rows get NULL.
+ const existing=new Set((await c.query("SELECT column_name FROM information_schema.columns WHERE table_schema='septisense' AND table_name='observations'")).rows.map(r=>r.column_name));
+ for(const [,column] of ADDED_COLUMNS)if(!existing.has(column))await c.query(`ALTER TABLE septisense.observations ADD COLUMN ${column} double precision`);
  await c.query('COMMIT');
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
@@ -36,7 +42,7 @@ async function save(c,id,v,risk,run){
  return {prediction_id:prediction,vitals_hash:hash};
 }
 export async function record(id,v,risk,run){const c=await pool.connect();try{await c.query('BEGIN');const p=await c.query('SELECT id FROM septisense.patients WHERE id=$1 FOR UPDATE',[id]);if(!p.rowCount)throw Object.assign(new Error('Unknown patient'),{status:404});const result=await save(c,id,v,risk,run);await c.query('COMMIT');return result}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
-export async function patients(){return (await pool.query(`SELECT p.*, r.risk, r.snapshot AS v, r.hash, r.id AS prediction_id, a.id AS alert_id, a.status AS alert_status FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id JOIN LATERAL (SELECT * FROM septisense.predictions WHERE encounter_id=e.id ORDER BY predicted_at DESC LIMIT 1) r ON true LEFT JOIN septisense.alerts a ON a.encounter_id=e.id AND a.run_id=r.run_id ORDER BY p.id='0402' DESC,p.id`)).rows}
+export async function patients(){return (await pool.query(`SELECT p.*, r.risk, r.snapshot AS v, r.hash, r.id AS prediction_id, a.id AS alert_id, a.status AS alert_status FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id JOIN LATERAL (SELECT * FROM septisense.predictions WHERE encounter_id=e.id ORDER BY predicted_at DESC LIMIT 1) r ON true LEFT JOIN septisense.alerts a ON a.encounter_id=e.id AND a.run_id=r.run_id ORDER BY p.id`)).rows}
 export async function audit(){return (await pool.query(`SELECT ev.created_at AS time, e.patient_id || ' alert ' || ev.event_type AS text, p.hash FROM septisense.alert_events ev JOIN septisense.alerts a ON a.id=ev.alert_id JOIN septisense.encounters e ON e.id=a.encounter_id JOIN septisense.predictions p ON p.id=a.prediction_id ORDER BY ev.created_at DESC LIMIT 100`)).rows}
 export async function acknowledge(id){const c=await pool.connect();try{await c.query('BEGIN');const r=await c.query("UPDATE septisense.alerts SET status='acknowledged' WHERE id=$1 AND status='open' RETURNING id",[id]);if(r.rowCount)await c.query("INSERT INTO septisense.alert_events(id,alert_id,event_type) VALUES($1,$2,'acknowledged')",[randomUUID(),id]);await c.query('COMMIT');return {acknowledged:!!r.rowCount}}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
 
@@ -63,3 +69,16 @@ export async function deleteAllPatientData(c){
  await c.query('DELETE FROM septisense.encounters');
  return (await c.query('DELETE FROM septisense.patients')).rowCount;
 }
+
+export async function seedDemoPatients(c){
+ const seedRun = randomUUID();
+ let count = 0;
+ for(const p of demoPatients){
+  await c.query('INSERT INTO septisense.patients(id,name,age,sex,bed) VALUES($1,$2,$3,$4,$5) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, age=EXCLUDED.age, sex=EXCLUDED.sex, bed=EXCLUDED.bed',[p.id,p.name,p.age,p.sex,p.bed]);
+  await c.query('INSERT INTO septisense.encounters(id,patient_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[`ICU-${p.id}-01`,p.id]);
+  await save(c,p.id,p.v,p.risk,seedRun);
+  count++;
+ }
+ return count;
+}
+

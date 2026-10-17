@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {initialize,patients,record,audit,acknowledge,pool,deletePatientData,deleteAllPatientData} from './database.mjs';
+import {initialize,patients,record,audit,acknowledge,pool,deletePatientData,deleteAllPatientData,seedDemoPatients} from './database.mjs';
 const assets={'/':['index.html','text/html'],'/index.html':['index.html','text/html'],'/app.js':['app.js','text/javascript'],'/style.css':['style.css','text/css']};
 function json(res,status,value){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value))}
 async function body(req){let text='';for await(const chunk of req){text+=chunk;if(text.length>16000)throw Object.assign(new Error('Request too large'),{status:413})}try{return JSON.parse(text)}catch{throw Object.assign(new Error('Invalid JSON'),{status:400})}}
@@ -9,6 +9,9 @@ const server=http.createServer(async(req,res)=>{
  try{
  const route=new URL(req.url,'http://localhost').pathname;
  if(req.method==='POST'&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`)return json(res,403,{error:'Origin not allowed'});
+ if(route==='/api/seed'&&req.method==='POST'){
+ const c=await pool.connect();try{await c.query('BEGIN');const count=await seedDemoPatients(c);await c.query('COMMIT');return json(res,200,{seeded:true,count});}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+ }
  if(route==='/api/delete-all-patients'&&req.method==='POST'){
  const b=await body(req);if(b.confirm!=='DELETE ALL')return json(res,400,{error:'Explicit DELETE ALL confirmation is required'});
  const c=await pool.connect();try{await c.query('BEGIN');await c.query("SET LOCAL lock_timeout='5s'");const count=await deleteAllPatientData(c);await c.query('COMMIT');return json(res,200,{deleted:true,count});}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}

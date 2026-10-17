@@ -1,12 +1,324 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SeptiSense · Clinical workspace</title><link rel="stylesheet" href="style.css"></head><body>
-<aside class="sidebar"><a class="brand" href="./"><span class="brand-icon">✳</span> SeptiSense<span class="brand-dot">®</span></a><div class="workspace"><span class="hospital">✚</span><div>Memorial Hospital<small>Critical care workspace</small></div><span>⌄</span></div><div class="nav-label">WORKSPACE</div><nav><button class="nav active" data-view="overview"><span>▦</span> Patient overview <b id="sidebar-patient-count">0</b></button><button class="nav" data-view="alerts"><span>♧</span> Alert center <i id="alert-count">1</i></button><button class="nav" data-view="audit"><span>▤</span> Audit trail</button></nav><div class="sidebar-bottom"><div class="system"><span class="dot"></span> All systems operational<small>Last sync just now</small></div><div class="profile"><div class="avatar">SC</div><div>Dr. Sarah Chen<small>Attending physician</small></div><span>⌄</span></div></div></aside>
-<main><header><div><span class="breadcrumb">Workspace <span>/</span></span> Patient overview</div><div class="header-right"><span class="demo-pill">◉ &nbsp; DEMO WORKSPACE</span><span class="header-date">Oct 17, 2026</span><div class="avatar small">SC</div></div></header>
-<div class="content"><div class="page-heading"><div><div class="eyebrow">CRITICAL CARE · ICU NORTH</div><h1>A clearer picture. Earlier.</h1><p>Real-time patient monitoring, with intelligence you can explain.</p></div><div class="page-actions"><button class="button danger" id="delete-all-patients">Delete all patients</button><button class="button" id="export">↗ &nbsp; Export report</button></div></div>
-<div class="stats"><div class="stat"><span>Patients monitored <span>♙</span></span><div><span id="monitored-count">08</span> <small>Active encounters</small></div><footer><span class="dot"></span> Monitoring active</footer></div><div class="stat"><span>High-risk patients <span>△</span></span><div id="high-stat">01 <small>Needs your attention</small></div><footer class="red-text">↑ <span id="high-caption">1 active clinical alert</span></footer></div><div class="stat"><span>Average risk score <span>⌁</span></span><div><span id="average">24</span><em>%</em> <small>Unit-wide overview</small></div><footer>Across simulated patients</footer></div><div class="stat"><span>Early warning window <span>◷</span></span><div>6<em>h</em> <small>Prediction horizon</small></div><footer>Research target · demo only</footer></div></div>
-<div class="dashboard"><section class="panel roster"><div class="panel-title"><h2>Patients <span id="roster-count">08</span></h2><button class="icon-button" id="sort" title="Sort patients by risk" aria-label="Sort patients by risk">⇅</button></div><div class="search"><span>⌕</span><input id="search" placeholder="Search name or patient ID" aria-label="Search patients"></div><div class="filters"><button class="selected" data-filter="all">All patients</button><button data-filter="high">High risk</button><button data-filter="stable">Stable</button></div><div id="patient-list"></div><div class="roster-footer"><span class="dot"></span> Live monitoring <span>Updated just now</span></div></section>
-<div class="patient-detail"><section class="panel patient-panel"><div class="patient-head"><div class="patient-identity"><div class="patient-avatar" id="initials">JM</div><div><h2 id="patient-name">James Mitchell</h2><p id="patient-meta">PAT-0402 <span>·</span> 67 years, Male <span>·</span> Bed 04</p></div></div><span class="badge high" id="patient-badge">● High risk</span></div><div class="patient-tools"><button class="button danger" id="delete-patient">Delete patient data</button></div><div class="patient-context"><span>Admitted <b>Oct 16, 2026</b></span><span>Care team <b>Dr. Sarah Chen</b></span><span>Monitoring <b><span class="dot"></span> Continuous</b></span></div><div class="section-label">LIVE VITALS <span>◷ &nbsp; Updated just now</span></div><div class="vitals" id="vitals"></div></section>
-<div class="analysis-grid"><section class="panel risk-panel"><div class="panel-title"><h2>Sepsis risk trend</h2><span class="mini-tag">Last 6 hours</span></div><div class="risk-number"><strong id="risk-number">89</strong><span>%<small id="risk-change">Elevated risk · review required</small></span><span class="badge high" id="chart-badge">High risk</span></div><div class="chart"><svg viewBox="0 0 600 170" role="img" aria-label="Illustrative six-hour sepsis risk trend"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#df785c" stop-opacity=".25"/><stop offset="1" stop-color="#df785c" stop-opacity="0"/></linearGradient></defs><path d="M35 20H575M35 65H575M35 110H575M35 155H575" stroke="#e9edeb" fill="none"/><path d="M35 56H575" stroke="#dcab95" stroke-dasharray="5 5"/><text x="480" y="48" fill="#ae8170" font-size="10">Alert threshold 70%</text><text x="0" y="24">100</text><text x="9" y="69">70</text><text x="9" y="114">40</text><text x="15" y="159">0</text><path id="chart-area" fill="url(#fill)"/><path id="chart-line" fill="none" stroke="#d8785b" stroke-width="3" stroke-linecap="round"/><circle id="chart-point" r="5" fill="#d8785b" stroke="white" stroke-width="3"/></svg><div class="chart-times"><span>08:00</span><span>09:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>Now</span></div></div><div class="chart-legend"><span><i></i> Illustrative risk trend</span><span>Simulated data</span></div></section><section class="panel scores-panel"><div class="panel-title"><h2>Clinical scores</h2><span class="info" title="Screening scores do not establish a sepsis diagnosis">ⓘ</span></div><div class="score-row"><div><strong>qSOFA</strong><small>Organ dysfunction screen</small></div><div><b id="qsofa">3</b><span> / 3</span></div></div><div class="score-bars" id="q-bars"></div><div class="score-row"><div><strong>SIRS</strong><small>Inflammatory response</small></div><div><b id="sirs">4</b><span> / 4</span></div></div><div class="score-bars" id="s-bars"></div><div class="score-note">Rule-based scores<small>Transparent. Traceable. Instant.</small></div></section></div>
-<section class="panel insights"><div class="panel-title"><h2><span class="spark">✧</span> Behind the alert</h2><span class="mini-tag">EXPLAINABLE INSIGHTS</span></div><p id="explanation"></p><div class="drivers" id="drivers"></div><div class="insight-footer"><span>◈ &nbsp; Rules + illustrative risk model</span><button id="review">Review alert <span>↗</span></button></div></section></div></div>
-<footer class="page-footer"><span>✳ SeptiSense <span>·</span> Earlier insight. Better-informed care.</span><span>Hackathon prototype · Synthetic data · Not for clinical use</span></footer></div></main>
-<dialog id="modal"><div class="modal-head"><div><div class="eyebrow" id="modal-eyebrow">CLINICAL WORKSPACE</div><h2 id="modal-title"></h2></div><button id="close-modal" class="icon-button" aria-label="Close dialog">×</button></div><div id="modal-body"></div></dialog><div class="toast" id="toast" role="status"></div><script type="module" src="app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SeptiSense · Early Sepsis Detection</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <a class="brand" href="./">
+      <span class="brand-icon">✳</span>
+      <span>SeptiSense<small class="brand-sub">Early Sepsis Detection</small></span>
+    </a>
+
+    <div class="workspace">
+      <span class="hospital">🏡</span>
+      <div>
+        Whispering Pines
+        <small>Senior Living & Post-Acute</small>
+      </div>
+      <span>⌄</span>
+    </div>
+
+    <div class="nav-label">WORKSPACE</div>
+    <nav>
+      <button class="nav active" data-view="overview">
+        <span>▦</span> Resident overview <b id="sidebar-patient-count">0</b>
+      </button>
+      <button class="nav" data-view="alerts">
+        <span>♧</span> Early alerts <i id="alert-count">1</i>
+      </button>
+      <button class="nav" data-view="audit">
+        <span>▤</span> On-chain audit
+      </button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="system">
+        <span class="dot"></span> Patient database connected
+        <small>Real-time surveillance active</small>
+      </div>
+      <div class="profile">
+        <div class="avatar" id="user-avatar">SC</div>
+        <div>
+          <span id="user-name">Dr. Sarah Chen</span>
+          <small id="user-role-label">Attending Physician · Geriatrics</small>
+        </div>
+        <span>⌄</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main>
+    <header>
+      <div>
+        <span class="breadcrumb">Senior Living <span>/</span></span>
+        <span id="header-breadcrumb">Resident Early Warning Surveillance</span>
+      </div>
+      <div class="header-right">
+        <span class="demo-pill">◉ &nbsp; EARLY DETECTION WORKSPACE</span>
+        <span class="header-date">Oct 17, 2026</span>
+        <div class="avatar small">SC</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Page Heading -->
+      <div class="page-heading">
+        <div class="header-status-chips">
+          <span class="chip red" id="chip-urgent">● <b id="chip-urgent-count">1</b> Urgent assessment</span>
+          <span class="chip yellow" id="chip-watch">▲ <b id="chip-watch-count">2</b> Elevated watch</span>
+          <span class="chip green" id="chip-stable">✓ <b id="chip-stable-count">17</b> Stable baseline</span>
+        </div>
+        <div class="page-actions">
+          <button class="button danger" id="delete-all-patients">Delete all residents</button>
+          <button class="button" id="export">↗ &nbsp; Export care report</button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="stats">
+        <div class="stat">
+          <span>Residents monitored <span>♙</span></span>
+          <div><span id="monitored-count">08</span> <small>Across 3 wings</small></div>
+          <footer><span class="dot"></span> Assisted Living & Memory Care</footer>
+        </div>
+        <div class="stat">
+          <span>Early warning flags <span>△</span></span>
+          <div id="high-stat">01 <small>Needs early check</small></div>
+          <footer class="red-text">↑ <span id="high-caption">1 active early alert</span></footer>
+        </div>
+        <div class="stat">
+          <span>ER transfers prevented <span>🛡️</span></span>
+          <div><span id="average">85</span><em>%</em> <small>Early diversion rate</small></div>
+          <footer>Catching signs before 911 dispatch</footer>
+        </div>
+        <div class="stat">
+          <span>Early warning lead time <span>◷</span></span>
+          <div>18<em>h</em> <small>Average lead window</small></div>
+          <footer>Small signs caught days ahead</footer>
+        </div>
+      </div>
+
+      <!-- Dashboard Layout -->
+      <div class="dashboard">
+        <!-- Left Column: Resident Roster -->
+        <section class="panel roster">
+          <div class="panel-title">
+            <h2>Residents <span id="roster-count">08</span></h2>
+            <button class="icon-button" id="sort" title="Sort residents by risk level" aria-label="Sort residents by risk level">⇅</button>
+          </div>
+          <div class="search">
+            <span>⌕</span>
+            <input id="search" placeholder="Search resident, room, or ID" aria-label="Search residents">
+          </div>
+          <div class="filters">
+            <button class="selected" data-filter="all">All residents</button>
+            <button data-filter="high">Warning</button>
+            <button data-filter="stable">Stable</button>
+          </div>
+          <div id="patient-list"></div>
+          <div class="roster-footer">
+            <span class="dot"></span> EHR Sentinel Sync <span>Continuous</span>
+          </div>
+        </section>
+
+        <!-- Right Column: Detail View -->
+        <div class="patient-detail">
+          <!-- Resident Identity Panel -->
+          <section class="panel patient-panel">
+            <div class="patient-head">
+              <div class="patient-identity">
+                <div class="patient-avatar" id="initials">JM</div>
+                <div>
+                  <h2 id="patient-name">James Mitchell</h2>
+                  <p id="patient-meta">RES-0402 <span>·</span> 67 years, Male <span>·</span> Room 204-B (Post-Acute Wing)</p>
+                </div>
+              </div>
+              <div class="patient-badges">
+                <span class="badge" id="sepsis-status" hidden></span>
+                <span class="badge high" id="patient-badge">● High risk</span>
+              </div>
+            </div>
+
+            <div class="patient-tools">
+              <button class="button sbar-btn" id="sbar-btn" title="Generate SBAR Clinical Handoff">
+                📋 &nbsp; Generate SBAR handoff
+              </button>
+              <button class="button secondary" id="blink-btn" title="Open Solana Blink Emergency Action">
+                ⚡ &nbsp; Solana Blink action
+              </button>
+              <button class="button danger" id="delete-patient">Delete resident data</button>
+            </div>
+
+            <div class="patient-context">
+              <span>Admitted <b>Oct 16, 2026</b></span>
+              <span>Attending <b>Dr. Sarah Chen</b></span>
+              <span>Primary CNA <b>Maria Rodriguez</b></span>
+              <span>Care Level <b>Post-Acute Rehab</b></span>
+            </div>
+
+            <!-- Patient information from the PSV file -->
+            <div class="section-label">
+              <span>PATIENT INFORMATION</span>
+            </div>
+            <div class="psv-grid psv-context" id="psv-context"></div>
+
+            <!-- Physiological Vitals Grid -->
+            <div class="section-label">
+              <span>PHYSIOLOGICAL OBSERVATIONS</span>
+            </div>
+            <div class="vitals" id="vitals"></div>
+
+            <!-- Every column from the PhysioNet PSV dataset -->
+            <div class="section-label">
+              <span>ALL MEASURED INFORMATION</span>
+            </div>
+            <div class="psv-panel" id="psv-observations">
+              <div class="psv-empty">Loading dataset observations…</div>
+            </div>
+          </section>
+
+          <!-- Analytics Grid: Risk Trend & Clinical Scores -->
+          <div class="analysis-grid">
+            <section class="panel risk-panel">
+              <div class="panel-title">
+                <h2>Early Sepsis Risk Trajectory</h2>
+                <span class="mini-tag">Last 6 hours</span>
+              </div>
+              <div class="risk-number">
+                <strong id="risk-number">89</strong>
+                <span>%<small id="risk-change">Elevated risk · prompt assessment</small></span>
+                <span class="badge high" id="chart-badge">High risk</span>
+              </div>
+              <div class="chart">
+                <svg viewBox="0 0 600 170" role="img" aria-label="Illustrative six-hour sepsis risk trend">
+                  <defs>
+                    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#df785c" stop-opacity=".25"/>
+                      <stop offset="1" stop-color="#df785c" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M35 20H575M35 65H575M35 110H575M35 155H575" stroke="#e9edeb" fill="none"/>
+                  <path d="M35 56H575" stroke="#dcab95" stroke-dasharray="5 5"/>
+                  <text x="470" y="48" fill="#ae8170" font-size="10">Alert threshold 70%</text>
+                  <text x="0" y="24">100</text>
+                  <text x="9" y="69">70</text>
+                  <text x="9" y="114">40</text>
+                  <text x="15" y="159">0</text>
+                  <path id="chart-area" fill="url(#fill)"/>
+                  <path id="chart-line" fill="none" stroke="#d8785b" stroke-width="3" stroke-linecap="round"/>
+                  <circle id="chart-point" r="5" fill="#d8785b" stroke="white" stroke-width="3"/>
+                </svg>
+                <div class="chart-times">
+                  <span>-5h</span><span>-4h</span><span>-3h</span><span>-2h</span><span>-1h</span><span>Now</span>
+                </div>
+              </div>
+              <div class="chart-legend">
+                <span><i></i> Early warning trajectory</span>
+                <span>Tiger Data real-time stream</span>
+              </div>
+            </section>
+
+            <section class="panel scores-panel">
+              <div class="panel-title">
+                <h2>Clinical Screening Scores</h2>
+                <span class="info" title="Screening scores assist care teams in early recognition">ⓘ</span>
+              </div>
+              <div class="score-row">
+                <div>
+                  <strong>qSOFA</strong>
+                  <small>Quick Organ Dysfunction (Bedside)</small>
+                </div>
+                <div><b id="qsofa">3</b><span> / 3</span></div>
+              </div>
+              <div class="score-bars" id="q-bars"></div>
+              <div class="score-row">
+                <div>
+                  <strong>SIRS</strong>
+                  <small>Systemic Inflammatory Response</small>
+                </div>
+                <div><b id="sirs">4</b><span> / 4</span></div>
+              </div>
+              <div class="score-bars" id="s-bars"></div>
+              <div class="score-note">
+                Senior-Adjusted Screening
+                <small>Alerts on atypical geriatric presentations</small>
+              </div>
+            </section>
+          </div>
+
+          <!-- Explainable AI Panel (Bonus Requirement!) -->
+          <section class="panel insights">
+            <div class="panel-title">
+              <h2><span class="spark">✧</span> Behind the Alert · Why Was This Resident Flagged?</h2>
+              <span class="mini-tag highlight">EXPLAINABLE AI REASONING</span>
+            </div>
+            
+            <div class="explain-container">
+              <div class="explain-summary" id="explanation"></div>
+              
+              <div class="explain-columns">
+                <div class="explain-col">
+                  <strong>🔍 Early Signals Caught</strong>
+                  <div class="drivers" id="drivers"></div>
+                </div>
+                <div class="explain-col">
+                  <strong>💡 Geriatric Clinical Context</strong>
+                  <p id="clinical-context" class="context-p">
+                    In seniors, early infection rarely presents with a fever spike. Look for subtle tachypnea, mild confusion, and missed meals as the earliest clues of systemic inflammation.
+                  </p>
+                </div>
+              </div>
+
+              <div class="care-plan-box">
+                <div class="plan-header">
+                  <strong>📋 Empathetic Care Team Action Plan (Prevent ER Transfer)</strong>
+                  <span class="plan-badge">Early Protocol</span>
+                </div>
+                <ul class="plan-steps" id="plan-steps">
+                  <li><strong>Hydration Check:</strong> Offer 250–500 mL oral fluids or initiate bedside hydration protocol.</li>
+                  <li><strong>Urgent Assessment:</strong> Perform point-of-care dipstick urinalysis and recheck vitals in 60 minutes.</li>
+                  <li><strong>Physician Review:</strong> SBAR summary generated for Dr. Sarah Chen. Emergency Solana Blink order available.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="insight-footer">
+              <span>◈ &nbsp; Multimodal: Behavioral logs + qSOFA + Vital trends</span>
+              <button id="review">Review Solana Blink & Action <span>↗</span></button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Page Footer -->
+      <footer class="page-footer">
+        <span>✳ SeptiSense <span>·</span> Early Sepsis Detection <span>·</span> Designed with empathy for care teams</span>
+        <span>Prototype demonstration · Timescale & Tiger Data powered · Devnet Solana Action ready</span>
+      </footer>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <dialog id="modal">
+    <div class="modal-head">
+      <div>
+        <div class="eyebrow" id="modal-eyebrow">CARE WORKSPACE</div>
+        <h2 id="modal-title"></h2>
+      </div>
+      <button id="close-modal" class="icon-button" aria-label="Close dialog">×</button>
+    </div>
+    <div id="modal-body"></div>
+  </dialog>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="toast" role="status"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
