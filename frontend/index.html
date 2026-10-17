@@ -10,29 +10,27 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <a class="brand" href="./">
-      <span class="brand-icon">✳</span>
+      <span class="brand-icon"><i data-icon="pulse"></i></span>
       <span>SeptiSense<small class="brand-sub">Early Sepsis Detection</small></span>
     </a>
 
     <div class="workspace">
-      <span class="hospital">🏡</span>
+      <span class="hospital"><i data-icon="hospital"></i></span>
       <div>
-        Whispering Pines
-        <small>Senior Living & Post-Acute</small>
+        Sepsis Hospital
       </div>
-      <span>⌄</span>
     </div>
 
     <div class="nav-label">WORKSPACE</div>
     <nav>
       <button class="nav active" data-view="overview">
-        <span>▦</span> Resident overview <b id="sidebar-patient-count">0</b>
+        <span><i data-icon="grid"></i></span> Resident overview <b id="sidebar-patient-count">0</b>
       </button>
       <button class="nav" data-view="alerts">
-        <span>♧</span> Early alerts <i id="alert-count">1</i>
+        <span><i data-icon="bell"></i></span> Early alerts <i id="alert-count">1</i>
       </button>
       <button class="nav" data-view="audit">
-        <span>▤</span> On-chain audit
+        <span><i data-icon="file"></i></span> On-chain audit
       </button>
     </nav>
 
@@ -47,7 +45,7 @@
           <span id="user-name">Dr. Sarah Chen</span>
           <small id="user-role-label">Attending Physician · Geriatrics</small>
         </div>
-        <span>⌄</span>
+        <span><i data-icon="chevron"></i></span>
       </div>
     </div>
   </aside>
@@ -60,7 +58,7 @@
         <span id="header-breadcrumb">Resident Early Warning Surveillance</span>
       </div>
       <div class="header-right">
-        <span class="demo-pill">◉ &nbsp; EARLY DETECTION WORKSPACE</span>
+        <span class="demo-pill"><i data-icon="target"></i> &nbsp; EARLY DETECTION WORKSPACE</span>
         <span class="header-date">Oct 17, 2026</span>
         <div class="avatar small">SC</div>
       </div>
@@ -70,35 +68,35 @@
       <!-- Page Heading -->
       <div class="page-heading">
         <div class="header-status-chips">
-          <span class="chip red" id="chip-urgent">● <b id="chip-urgent-count">1</b> Urgent assessment</span>
-          <span class="chip yellow" id="chip-watch">▲ <b id="chip-watch-count">2</b> Elevated watch</span>
-          <span class="chip green" id="chip-stable">✓ <b id="chip-stable-count">17</b> Stable baseline</span>
+          <span class="chip red" id="chip-urgent"><i data-icon="alert"></i> <b id="chip-urgent-count">1</b> Urgent assessment</span>
+          <span class="chip yellow" id="chip-watch"><i data-icon="eye"></i> <b id="chip-watch-count">2</b> Elevated watch</span>
+          <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">17</b> Stable baseline</span>
         </div>
         <div class="page-actions">
           <button class="button danger" id="delete-all-patients">Delete all residents</button>
-          <button class="button" id="export">↗ &nbsp; Export care report</button>
+          <button class="button" id="export"><i data-icon="download"></i> &nbsp; Export care report</button>
         </div>
       </div>
 
       <!-- KPI Summary Cards -->
       <div class="stats">
         <div class="stat">
-          <span>Residents monitored <span>♙</span></span>
+          <span>Residents monitored <span><i data-icon="users"></i></span></span>
           <div><span id="monitored-count">08</span> <small>Across 3 wings</small></div>
           <footer><span class="dot"></span> Assisted Living & Memory Care</footer>
         </div>
         <div class="stat">
-          <span>Early warning flags <span>△</span></span>
+          <span>Early warning flags <span><i data-icon="triangle"></i></span></span>
           <div id="high-stat">01 <small>Needs early check</small></div>
           <footer class="red-text">↑ <span id="high-caption">1 active early alert</span></footer>
         </div>
         <div class="stat">
-          <span>ER transfers prevented <span>🛡️</span></span>
+          <span>ER transfers prevented <span><i data-icon="shield"></i></span></span>
           <div><span id="average">85</span><em>%</em> <small>Early diversion rate</small></div>
           <footer>Catching signs before 911 dispatch</footer>
         </div>
         <div class="stat">
-          <span>Early warning lead time <span>◷</span></span>
+          <span>Early warning lead time <span><i data-icon="clock"></i></span></span>
           <div>18<em>h</em> <small>Average lead window</small></div>
           <footer>Small signs caught days ahead</footer>
         </div>
@@ -110,10 +108,10 @@
         <section class="panel roster">
           <div class="panel-title">
             <h2>Residents <span id="roster-count">08</span></h2>
-            <button class="icon-button" id="sort" title="Sort residents by risk level" aria-label="Sort residents by risk level">⇅</button>
+            <button class="icon-button" id="sort" title="Sort residents by risk level" aria-label="Sort residents by risk level"><i data-icon="sort"></i></button>
           </div>
           <div class="search">
-            <span>⌕</span>
+            <span><i data-icon="search"></i></span>
             <input id="search" placeholder="Search resident, room, or ID" aria-label="Search residents">
           </div>
           <div class="filters">
@@ -147,10 +145,10 @@
 
             <div class="patient-tools">
               <button class="button sbar-btn" id="sbar-btn" title="Generate SBAR Clinical Handoff">
-                📋 &nbsp; Generate SBAR handoff
+                <i data-icon="clipboard"></i> &nbsp; Generate SBAR handoff
               </button>
               <button class="button secondary" id="blink-btn" title="Open Solana Blink Emergency Action">
-                ⚡ &nbsp; Solana Blink action
+                <i data-icon="zap"></i> &nbsp; Solana Blink action
               </button>
               <button class="button danger" id="delete-patient">Delete resident data</button>
             </div>
@@ -255,7 +253,7 @@
           <!-- Explainable AI Panel (Bonus Requirement!) -->
           <section class="panel insights">
             <div class="panel-title">
-              <h2><span class="spark">✧</span> Behind the Alert · Why Was This Resident Flagged?</h2>
+              <h2><span class="spark"><i data-icon="sparkle"></i></span> Behind the Alert · Why Was This Resident Flagged?</h2>
               <span class="mini-tag highlight">EXPLAINABLE AI REASONING</span>
             </div>
             
@@ -264,11 +262,11 @@
               
               <div class="explain-columns">
                 <div class="explain-col">
-                  <strong>🔍 Early Signals Caught</strong>
+                  <strong><i data-icon="search"></i> Early Signals Caught</strong>
                   <div class="drivers" id="drivers"></div>
                 </div>
                 <div class="explain-col">
-                  <strong>💡 Geriatric Clinical Context</strong>
+                  <strong><i data-icon="bulb"></i> Geriatric Clinical Context</strong>
                   <p id="clinical-context" class="context-p">
                     In seniors, early infection rarely presents with a fever spike. Look for subtle tachypnea, mild confusion, and missed meals as the earliest clues of systemic inflammation.
                   </p>
@@ -277,7 +275,7 @@
 
               <div class="care-plan-box">
                 <div class="plan-header">
-                  <strong>📋 Empathetic Care Team Action Plan (Prevent ER Transfer)</strong>
+                  <strong><i data-icon="clipboard"></i> Empathetic Care Team Action Plan (Prevent ER Transfer)</strong>
                   <span class="plan-badge">Early Protocol</span>
                 </div>
                 <ul class="plan-steps" id="plan-steps">
@@ -289,7 +287,7 @@
             </div>
 
             <div class="insight-footer">
-              <span>◈ &nbsp; Multimodal: Behavioral logs + qSOFA + Vital trends</span>
+              <span><i data-icon="layers"></i> &nbsp; Multimodal: Behavioral logs + qSOFA + Vital trends</span>
               <button id="review">Review Solana Blink & Action <span>↗</span></button>
             </div>
           </section>
@@ -298,7 +296,7 @@
 
       <!-- Page Footer -->
       <footer class="page-footer">
-        <span>✳ SeptiSense <span>·</span> Early Sepsis Detection <span>·</span> Designed with empathy for care teams</span>
+        <span><i data-icon="pulse"></i> SeptiSense <span>·</span> Early Sepsis Detection <span>·</span> Designed with empathy for care teams</span>
         <span>Prototype demonstration · Timescale & Tiger Data powered · Devnet Solana Action ready</span>
       </footer>
     </div>

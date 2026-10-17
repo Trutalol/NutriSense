@@ -1,4 +1,41 @@
 const $=s=>document.querySelector(s);
+
+// Line icons (24×24, stroked) used in place of emoji. Static markup uses <i data-icon="name">.
+const ICONS={
+  pulse:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  hospital:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M12 8v6M9 11h6M10 21v-3h4v3"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+  chevron:'<path d="m6 9 6 6 6-6"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>',
+  alert:'<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  triangle:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  sort:'<path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  clipboard:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+  zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+  sparkle:'<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+  bulb:'<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
+  layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+  heart:'<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/>',
+  wind:'<path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/>',
+  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  thermometer:'<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"/>',
+  droplet:'<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5S12.5 5.5 12 3c-.5 2.5-2 4.9-4 6.5S5 13 5 15a7 7 0 0 0 7 7z"/>',
+  mind:'<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 15s1.3 1.5 3.5 1.5 3.5-1.5 3.5-1.5"/>',
+  cells:'<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4"/><circle cx="17" cy="5.5" r="2"/>',
+  flask:'<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3M7 15h10"/>',
+  utensils:'<path d="M3 2v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2M6 2v20M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3zm0 0v7"/>'
+};
+const icon=name=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]||''}</svg>`;
+document.querySelectorAll('i[data-icon]').forEach(el=>{el.outerHTML=icon(el.dataset.icon);});
 const patients=[];
 let original;let selected,filter='all',timer=null,elapsed=0,descending=true;const audit=[];let activeRole='cna';
 const tier=p=>p.risk===null?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
@@ -7,43 +44,44 @@ const initials=p=>p.name.split(' ').map(n=>n[0]).join('');
 
 // Room and wing assignment for senior care facility
 function residentLocation(p){
-  const idNum = parseInt(p.id, 10) || 402;
-  const wing = idNum % 3 === 0 ? 'Memory Care Wing' : idNum % 2 === 0 ? 'Post-Acute Rehab' : 'Assisted Living West';
-  const room = `Room ${p.bed || '104'}-${idNum % 2 === 0 ? 'A' : 'B'}`;
-  return { room, wing, full: `${room} · ${wing}` };
+  // Room number is the patient number (trailing digits of the ID, as in the display name).
+  const digits=String(p.id).match(/\d+$/);
+  const room=`Room ${digits?Number(digits[0]):p.id}`;
+  const wing='Residence Wing';
+  return { room, wing, full: `${wing} · ${room}` };
 }
 
 // Behavioral & Daily Living Early Warning Signals
 function getBehavioralSignals(p){
   if(p.risk === null){
     return [
-      { title: 'Meal intake', value: 'Unrecorded', icon: '🍽️', warning: false, detail: 'Dietary log pending' },
-      { title: 'Mobility & transfers', value: 'Baseline', icon: '🚶', warning: false, detail: 'Routine physical therapy' },
-      { title: 'Hydration level', value: 'Standard fluids', icon: '💧', warning: false, detail: 'Bedside pitcher available' },
-      { title: 'Cognition & mood', value: 'Baseline', icon: '🧠', warning: false, detail: 'Orientation intact' }
+      { title: 'Meal intake', value: 'Unrecorded', icon: 'utensils', warning: false, detail: 'Dietary log pending' },
+      { title: 'Mobility & transfers', value: 'Baseline', icon: 'walk', warning: false, detail: 'Routine physical therapy' },
+      { title: 'Hydration level', value: 'Standard fluids', icon: 'droplet', warning: false, detail: 'Bedside pitcher available' },
+      { title: 'Cognition & mood', value: 'Baseline', icon: 'mind', warning: false, detail: 'Orientation intact' }
     ];
   }
   if(p.risk >= 70){
     return [
-      { title: 'Meal intake', value: 'Skipped 2 meals (25% eaten)', icon: '🍽️', warning: true, detail: 'Refused breakfast & lunch · Anorexia' },
-      { title: 'Mobility & transfers', value: 'Bed-bound / Reluctant', icon: '🚶', warning: true, detail: 'Refused morning hallway walk · Fatigue' },
-      { title: 'Hydration level', value: 'Low intake (< 450 mL)', icon: '💧', warning: true, detail: 'Care team pushed fluids x3' },
-      { title: 'Cognition & mood', value: 'New acute confusion', icon: '🧠', warning: true, detail: 'Atypical lethargy noted by CNA' }
+      { title: 'Meal intake', value: 'Skipped 2 meals (25% eaten)', icon: 'utensils', warning: true, detail: 'Refused breakfast & lunch · Anorexia' },
+      { title: 'Mobility & transfers', value: 'Bed-bound / Reluctant', icon: 'walk', warning: true, detail: 'Refused morning hallway walk · Fatigue' },
+      { title: 'Hydration level', value: 'Low intake (< 450 mL)', icon: 'droplet', warning: true, detail: 'Care team pushed fluids x3' },
+      { title: 'Cognition & mood', value: 'New acute confusion', icon: 'mind', warning: true, detail: 'Atypical lethargy noted by CNA' }
     ];
   }
   if(p.risk >= 30){
     return [
-      { title: 'Meal intake', value: 'Decreased (45% eaten)', icon: '🍽️', warning: true, detail: 'Ate half of lunch · Complained of fullness' },
-      { title: 'Mobility & transfers', value: 'Unsteady / Assist x2', icon: '🚶', warning: true, detail: 'Slow transfers · Increased fall precaution' },
-      { title: 'Hydration level', value: 'Borderline (750 mL)', icon: '💧', warning: false, detail: 'Reminded to drink water' },
-      { title: 'Cognition & mood', value: 'Mild lethargy / Sleepy', icon: '🧠', warning: true, detail: 'Harder to wake for morning meds' }
+      { title: 'Meal intake', value: 'Decreased (45% eaten)', icon: 'utensils', warning: true, detail: 'Ate half of lunch · Complained of fullness' },
+      { title: 'Mobility & transfers', value: 'Unsteady / Assist x2', icon: 'walk', warning: true, detail: 'Slow transfers · Increased fall precaution' },
+      { title: 'Hydration level', value: 'Borderline (750 mL)', icon: 'droplet', warning: false, detail: 'Reminded to drink water' },
+      { title: 'Cognition & mood', value: 'Mild lethargy / Sleepy', icon: 'mind', warning: true, detail: 'Harder to wake for morning meds' }
     ];
   }
   return [
-    { title: 'Meal intake', value: 'Good appetite (95% eaten)', icon: '🍽️', warning: false, detail: 'Finished full lunch in dining hall' },
-    { title: 'Mobility & transfers', value: 'Independent / Assist x1', icon: '🚶', warning: false, detail: 'Attended morning exercise class' },
-    { title: 'Hydration level', value: 'Adequate (> 1,600 mL)', icon: '💧', warning: false, detail: 'Meeting daily fluid goals' },
-    { title: 'Cognition & mood', value: 'Alert & oriented x4', icon: '🧠', warning: false, detail: 'Engaged in social activities' }
+    { title: 'Meal intake', value: 'Good appetite (95% eaten)', icon: 'utensils', warning: false, detail: 'Finished full lunch in dining hall' },
+    { title: 'Mobility & transfers', value: 'Independent / Assist x1', icon: 'walk', warning: false, detail: 'Attended morning exercise class' },
+    { title: 'Hydration level', value: 'Adequate (> 1,600 mL)', icon: 'droplet', warning: false, detail: 'Meeting daily fluid goals' },
+    { title: 'Cognition & mood', value: 'Alert & oriented x4', icon: 'mind', warning: false, detail: 'Engaged in social activities' }
   ];
 }
 
@@ -56,14 +94,14 @@ function scores(v){
 }
 
 const fields=[
-  ['Heart rate','bpm','♡',v=>v>90,'60–100 bpm'],
-  ['Respiratory rate','/min','≋',v=>v>=22,'12–20 /min (Critical qSOFA)'],
-  ['Systolic BP','mmHg','↧',v=>v<=100,'100–120 mmHg (Hypotension)'],
-  ['Temperature','°C','♧',v=>v>38||v<36,'36.5–37.5 °C (Atypical in seniors)'],
-  ['Oxygen saturation','%','◌',v=>v<92,'95–100%'],
-  ['Mental status','GCS','◈',v=>v<15,'GCS 15 (Confusion indicator)'],
-  ['White blood cells','×10⁹/L','⊙',v=>v>12||v<4,'4.5–11 ×10⁹/L'],
-  ['Serum lactate','mmol/L','⌁',v=>v>2,'0.5–2.0 mmol/L (Tissue perfusion)']
+  ['Heart rate','bpm','heart',v=>v>90,'60–100 bpm'],
+  ['Respiratory rate','/min','wind',v=>v>=22,'12–20 /min (Critical qSOFA)'],
+  ['Systolic BP','mmHg','gauge',v=>v<=100,'100–120 mmHg (Hypotension)'],
+  ['Temperature','°C','thermometer',v=>v>38||v<36,'36.5–37.5 °C (Atypical in seniors)'],
+  ['Oxygen saturation','%','droplet',v=>v<92,'95–100%'],
+  ['Mental status','GCS','mind',v=>v<15,'GCS 15 (Confusion indicator)'],
+  ['White blood cells','×10⁹/L','cells',v=>v>12||v<4,'4.5–11 ×10⁹/L'],
+  ['Serum lactate','mmol/L','flask',v=>v>2,'0.5–2.0 mmol/L (Tissue perfusion)']
 ];
 
 // Every measurement column in the PhysioNet PSV dataset: [PSV key, label, unit, typical low, typical high].
@@ -90,12 +128,12 @@ function renderList(){
     const beh=getBehavioralSignals(p)[0];
     const isHigh=tier(p)==='high';
     const isMed=tier(p)==='medium';
-    const tagText=isHigh?'🍽️ Skipped meals · Lethargy':isMed?'🍽️ Appetite drop':'✓ Baseline care';
+    const tagText=isHigh?`${icon('utensils')} Skipped meals · Lethargy`:isMed?`${icon('utensils')} Appetite drop`:`${icon('check')} Baseline care`;
     return `<button class="patient-row ${selected?.id===p.id?'selected':''}" data-id="${p.id}" aria-pressed="${selected.id===p.id}">
       <div class="row-avatar ${tier(p)}">${initials(p)}</div>
       <div>
         <strong>${p.name}</strong>
-        <small>${loc.room} · ${loc.wing}</small>
+        <small>${loc.wing} · ${loc.room}</small>
         <span class="row-tag ${tier(p)}">${tagText}</span>
       </div>
       <div class="row-risk ${tier(p)}">${p.risk===null?'—':p.risk+'%'}
@@ -138,7 +176,7 @@ function render(){
   const p=selected, s=scores(p.v), loc=residentLocation(p);
   $('#initials').textContent=initials(p);
   $('#patient-name').textContent=p.name;
-  $('#patient-meta').innerHTML=`RES-${p.id} <span>·</span> ${p.age} years, ${p.sex} <span>·</span> ${loc.full}`;
+  $('#patient-meta').innerHTML=`ID: RES-${p.id} <span>·</span> ${loc.wing} <span>·</span> ${loc.room}`;
   
   for(const id of ['patient-badge','chart-badge']){
     $('#'+id).className=`badge ${tier(p)}`;
@@ -151,7 +189,7 @@ function render(){
   // Render Physiological Vitals
   $('#vitals').innerHTML=fields.map((f,i)=>`
     <button type="button" data-vital="${i}" aria-label="View hourly ${f[0]} chart" class="vital ${(p.v[i]!==null&&f[3](p.v[i]))?'warning':''}">
-      <div class="vital-label">${f[2]} &nbsp;${f[0]}</div>
+      <div class="vital-label">${icon(f[2])} ${f[0]}</div>
       <div class="vital-value">${p.v[i]??'—'}<small>${f[1]}</small></div>
       <div class="vital-status">${(p.v[i]!==null&&f[3](p.v[i]))?'Outside reference':p.v[i]===null?'Not measured':f[4]}</div>
       <span class="vital-chart-hint">View hourly chart ↗</span>
@@ -364,7 +402,7 @@ async function showSbarModal(){
   const ds=drivers(p);
   
   const sbarText = `SBAR CLINICAL REPORT · EARLY SEPSIS DETECTION SENTINEL
-Facility: Whispering Pines Senior Living & Post-Acute
+Facility: Sepsis Hospital
 Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
 
 [SITUATION]
@@ -402,7 +440,7 @@ ${beh.map(b=>`   - ${b.title}: ${b.value} (${b.detail})`).join('\n')}
       <p class="sbar-intro">Ready for shift handoff, physician consultation, or EHR export.</p>
       <textarea class="sbar-textarea" id="sbar-text" readonly rows="14">${sbarText}</textarea>
       <div class="sbar-actions">
-        <button class="button dark" id="copy-sbar">📋 Copy SBAR to Clipboard</button>
+        <button class="button dark" id="copy-sbar">${icon('clipboard')} Copy SBAR to Clipboard</button>
         <button class="button secondary" id="close-sbar-btn">Close</button>
       </div>
     </div>
@@ -431,7 +469,7 @@ async function review(){
   modal('Solana Blink · Emergency Order Protocol', `
     <div class="blink-preview-card">
       <div class="blink-header">
-        <span class="blink-logo">⚡ SOLANA BLINK ACTION</span>
+        <span class="blink-logo">${icon('zap')} SOLANA BLINK ACTION</span>
         <span class="badge ${tier(selected)}">${p.risk_tier} · ${Math.round(p.risk_score*100)}%</span>
       </div>
       <h3>Code Sepsis Early Protocol: ${p.resident_name}</h3>
@@ -439,9 +477,9 @@ async function review(){
       <div class="blink-order-box">
         <strong>Authorized Clinical Order Bundle:</strong>
         <ul>
-          <li>✓ Bedside IV Crystalloid Resuscitation (30 ml/kg)</li>
-          <li>✓ Point-of-Care Blood & Urine Culture Labs</li>
-          <li>✓ Continuous SpO2 & Respiratory Monitoring</li>
+          <li>${icon('check')} Bedside IV Crystalloid Resuscitation (30 ml/kg)</li>
+          <li>${icon('check')} Point-of-Care Blood & Urine Culture Labs</li>
+          <li>${icon('check')} Continuous SpO2 & Respiratory Monitoring</li>
         </ul>
       </div>
       <p><strong>SHA-256 Observation Receipt (On-Chain Audit):</strong></p>

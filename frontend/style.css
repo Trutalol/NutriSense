@@ -784,6 +784,9 @@ dialog::backdrop { background: rgba(18, 45, 34, 0.45); backdrop-filter: blur(2px
 }
 
 [hidden] { display: none !important; }
+.icon { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.14em; flex-shrink: 0; }
+.vital-label .icon { width: 12px; height: 12px; }
+.chip .icon, .row-tag .icon { width: 11px; height: 11px; }
 .empty { padding: 30px; color: #8fa095; text-align: center; font-size: 12px; }
 
 /* Responsive */
