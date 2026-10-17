@@ -1,1 +1,15 @@
-{"name":"septisense-frontend","version":"1.0.0","private":true,"scripts":{"dev":"node server.mjs","start":"node server.mjs","check":"node --check app.js"}}
+{
+  "name": "septisense-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "node --check app.js",
+    "replay": "node replay.mjs",
+    "test": "node --test psv.test.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}
