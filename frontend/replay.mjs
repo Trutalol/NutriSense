@@ -13,18 +13,22 @@ Options:
   --max-hours N         Stop after N replay ticks
   --run-id UUID         Resume an interrupted run; committed hours are skipped
   --start ISO_TIME      Synthetic time assigned to ICU hour 1 (new runs only)
+  --min-age N          Only replay residents aged N or older (default: 65; use 0 for everyone)
   --dry-run            Validate every file without connecting or uploading
 Each tick uploads the matching ICULOS hour from every file. Ctrl+C stops safely.`;
 async function main(){
  if(args.includes('--help')){console.log(help);return}
- const options={};for(let i=0;i<args.length;i++){const key=args[i];if(key==='--dry-run'){options[key]=true;continue}if(!['--folder','--interval','--max-hours','--run-id','--start'].includes(key)||!args[i+1]||args[i+1].startsWith('--'))throw Error(`Invalid argument ${key}\n${help}`);options[key]=args[++i]}
+ const options={};for(let i=0;i<args.length;i++){const key=args[i];if(key==='--dry-run'){options[key]=true;continue}if(!['--folder','--interval','--max-hours','--run-id','--start','--min-age'].includes(key)||!args[i+1]||args[i+1].startsWith('--'))throw Error(`Invalid argument ${key}\n${help}`);options[key]=args[++i]}
  options['--folder']??=fileURLToPath(new URL('../data/psv/',import.meta.url));
  const interval=Number(options['--interval']??5),limit=Number(options['--max-hours']??Infinity);
  if(!Number.isFinite(interval)||interval<0.1||!(limit===Infinity||Number.isInteger(limit)&&limit>0))throw Error('Interval must be at least 0.1 seconds and max-hours a positive integer.');
  const folder=path.resolve(options['--folder']);const names=(await readdir(folder)).filter(f=>/\.psv$/i.test(f)).sort();
  if(!names.length)throw Error('No .psv files found in this folder.');
- const files=[];
- for(const name of names){const id=path.basename(name,path.extname(name));if(!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id))throw Error(`Unsupported patient filename: ${name}`);const file=path.join(folder,name),rows=await readPsv(file);if(!rows.length)throw Error(`${name} has no observations`);files.push({id,rows,byHour:new Map(rows.map(r=>[r.ICULOS,r])),sha256:createHash('sha256').update(await readFile(file)).digest('hex')});}
+ const minAge=Number(options['--min-age']??65);if(!Number.isFinite(minAge))throw Error('min-age must be a number');
+ const files=[];let skipped=0;
+ for(const name of names){const id=path.basename(name,path.extname(name));if(!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(id))throw Error(`Unsupported patient filename: ${name}`);const file=path.join(folder,name),rows=await readPsv(file);if(!rows.length)throw Error(`${name} has no observations`);if((rows[0].Age??0)<minAge){skipped++;continue}files.push({id,rows,byHour:new Map(rows.map(r=>[r.ICULOS,r])),sha256:createHash('sha256').update(await readFile(file)).digest('hex')});}
+ if(!files.length)throw Error(`No residents aged ${minAge}+ in this folder.`);
+ if(skipped)console.log(`Skipped ${skipped} files for people under ${minAge}.`);
  const maxHour=Math.max(...files.map(f=>f.rows.at(-1).ICULOS));
  console.log(`Validated ${files.length} patients, ${files.reduce((sum,f)=>sum+f.rows.length,0)} rows; ICU hours 1–${maxHour}. Missing values stay NULL.`);
  if(options['--dry-run'])return;

@@ -3,6 +3,7 @@ const $=s=>document.querySelector(s);
 // Line icons (24×24, stroked) used in place of emoji. Static markup uses <i data-icon="name">.
 const ICONS={
   pulse:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v11a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9"/>',
   hospital:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M12 8v6M9 11h6M10 21v-3h4v3"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -32,124 +33,93 @@ const ICONS={
   mind:'<circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 15s1.3 1.5 3.5 1.5 3.5-1.5 3.5-1.5"/>',
   cells:'<circle cx="8" cy="9" r="4"/><circle cx="16.5" cy="15.5" r="4"/><circle cx="17" cy="5.5" r="2"/>',
   flask:'<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3M7 15h10"/>',
+  scale:'<path d="M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0zM12 3v18M8 21h8"/>',
   utensils:'<path d="M3 2v7a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2M6 2v20M21 15V2a5 5 0 0 0-5 5v6a2 2 0 0 0 2 2h3zm0 0v7"/>'
 };
 const icon=name=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]||''}</svg>`;
 document.querySelectorAll('i[data-icon]').forEach(el=>{el.outerHTML=icon(el.dataset.icon);});
 const patients=[];
-let original;let selected,filter='all',timer=null,elapsed=0,descending=true;const audit=[];let activeRole='cna';
-const tier=p=>p.risk===null?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
-const label=p=>({high:'Early warning (High)',medium:'Moderate watch',stable:'Stable baseline',unscored:'Not scored'})[tier(p)];
-const initials=p=>p.name.split(' ').map(n=>n[0]).join('');
+let selected,filter='all',descending=true;
+const tier=p=>p.risk===null||p.risk===undefined?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
+const label=p=>({high:'High malnutrition risk',medium:'Nutrition watch',stable:'On track',unscored:'Not scored'})[tier(p)];
+const shortLabel=p=>({high:'High risk',medium:'Watch',stable:'On track',unscored:'No log'})[tier(p)];
+// "Resident 100013" shows as "13"; other names use their initials.
+const initials=p=>{const m=/^Resident (\d+)$/.exec(p.name);return m?m[1].slice(-2):p.name.split(' ').map(n=>n[0]).join('');};
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const fmt=(v,d=0)=>v===null||v===undefined?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+const drivers=p=>p.details?.drivers||[];
+const summary=p=>p.details?.summary||{};
+const profile=p=>p.details?.profile||{};
+const mealAvg=r=>{const m=[r.breakfast_pct,r.lunch_pct,r.dinner_pct].filter(v=>v!==null&&v!==undefined);return m.length?m.reduce((a,b)=>a+b,0)/m.length:null;};
 
 // Room and wing assignment for senior care facility
 function residentLocation(p){
-  // Room number is the patient number (trailing digits of the ID, as in the display name).
+  // Room number is the resident number (trailing digits of the ID, as in the display name).
   const digits=String(p.id).match(/\d+$/);
   const room=`Room ${digits?Number(digits[0]):p.id}`;
   const wing='Residence Wing';
   return { room, wing, full: `${wing} · ${room}` };
 }
 
-// Behavioral & Daily Living Early Warning Signals
-function getBehavioralSignals(p){
-  if(p.risk === null){
-    return [
-      { title: 'Meal intake', value: 'Unrecorded', icon: 'utensils', warning: false, detail: 'Dietary log pending' },
-      { title: 'Mobility & transfers', value: 'Baseline', icon: 'walk', warning: false, detail: 'Routine physical therapy' },
-      { title: 'Hydration level', value: 'Standard fluids', icon: 'droplet', warning: false, detail: 'Bedside pitcher available' },
-      { title: 'Cognition & mood', value: 'Baseline', icon: 'mind', warning: false, detail: 'Orientation intact' }
-    ];
-  }
-  if(p.risk >= 70){
-    return [
-      { title: 'Meal intake', value: 'Skipped 2 meals (25% eaten)', icon: 'utensils', warning: true, detail: 'Refused breakfast & lunch · Anorexia' },
-      { title: 'Mobility & transfers', value: 'Bed-bound / Reluctant', icon: 'walk', warning: true, detail: 'Refused morning hallway walk · Fatigue' },
-      { title: 'Hydration level', value: 'Low intake (< 450 mL)', icon: 'droplet', warning: true, detail: 'Care team pushed fluids x3' },
-      { title: 'Cognition & mood', value: 'New acute confusion', icon: 'mind', warning: true, detail: 'Atypical lethargy noted by CNA' }
-    ];
-  }
-  if(p.risk >= 30){
-    return [
-      { title: 'Meal intake', value: 'Decreased (45% eaten)', icon: 'utensils', warning: true, detail: 'Ate half of lunch · Complained of fullness' },
-      { title: 'Mobility & transfers', value: 'Unsteady / Assist x2', icon: 'walk', warning: true, detail: 'Slow transfers · Increased fall precaution' },
-      { title: 'Hydration level', value: 'Borderline (750 mL)', icon: 'droplet', warning: false, detail: 'Reminded to drink water' },
-      { title: 'Cognition & mood', value: 'Mild lethargy / Sleepy', icon: 'mind', warning: true, detail: 'Harder to wake for morning meds' }
-    ];
-  }
-  return [
-    { title: 'Meal intake', value: 'Good appetite (95% eaten)', icon: 'utensils', warning: false, detail: 'Finished full lunch in dining hall' },
-    { title: 'Mobility & transfers', value: 'Independent / Assist x1', icon: 'walk', warning: false, detail: 'Attended morning exercise class' },
-    { title: 'Hydration level', value: 'Adequate (> 1,600 mL)', icon: 'droplet', warning: false, detail: 'Meeting daily fluid goals' },
-    { title: 'Cognition & mood', value: 'Alert & oriented x4', icon: 'mind', warning: false, detail: 'Engaged in social activities' }
-  ];
-}
-
-function scores(v){
-  const [hr,rr,sbp,temp,,gcs,wbc]=v;
-  return {
-    qsofa: [sbp,rr,gcs].some(x=>x===null) ? null : Number(sbp<=100)+Number(rr>=22)+Number(gcs<15),
-    sirs: [temp,hr,rr,wbc].some(x=>x===null) ? null : Number(temp>38||temp<36)+Number(hr>90)+Number(rr>20)+Number(wbc>12||wbc<4)
-  };
-}
-
+// Supporting bedside vitals (from the PSV replay): [label, unit, icon, outside-range test, typical range].
 const fields=[
-  ['Heart rate','bpm','heart',v=>v>90,'60–100 bpm'],
-  ['Respiratory rate','/min','wind',v=>v>=22,'12–20 /min (Critical qSOFA)'],
-  ['Systolic BP','mmHg','gauge',v=>v<=100,'100–120 mmHg (Hypotension)'],
-  ['Temperature','°C','thermometer',v=>v>38||v<36,'36.5–37.5 °C (Atypical in seniors)'],
-  ['Oxygen saturation','%','droplet',v=>v<92,'95–100%'],
-  ['Mental status','GCS','mind',v=>v<15,'GCS 15 (Confusion indicator)'],
-  ['White blood cells','×10⁹/L','cells',v=>v>12||v<4,'4.5–11 ×10⁹/L'],
-  ['Serum lactate','mmol/L','flask',v=>v>2,'0.5–2.0 mmol/L (Tissue perfusion)']
+  ['Heart rate','bpm','heart',v=>v>100||v<50,'60–100 bpm'],
+  ['Respiratory rate','/min','wind',v=>v>20||v<10,'12–20 /min'],
+  ['Systolic BP','mmHg','gauge',v=>v<100,'100–140 mmHg'],
+  ['Temperature','°C','thermometer',v=>v>38||v<36,'36–38 °C'],
+  ['Oxygen saturation','%','droplet',v=>v<92,'95–100%']
 ];
+const vitalKeys=['HR','Resp','SBP','Temp','O2Sat'];
 
-// Every measurement column in the PhysioNet PSV dataset: [PSV key, label, unit, typical low, typical high].
-// Ranges are typical adult reference values used only for highlighting; null means no range is shown.
-const psvGroups=[
-  ['Vital signs',[['HR','Heart rate','bpm',60,100],['O2Sat','Pulse oximetry','%',95,100],['Temp','Temperature','°C',36,38],['SBP','Systolic BP','mmHg',100,140],['MAP','Mean arterial pressure','mmHg',65,110],['DBP','Diastolic BP','mmHg',60,90],['Resp','Respiratory rate','/min',12,20],['EtCO2','End-tidal CO₂','mmHg',35,45]]],
-  ['Blood gas',[['BaseExcess','Base excess','mmol/L',-2,2],['HCO3','Bicarbonate (HCO₃)','mmol/L',22,28],['FiO2','Inspired O₂ (FiO₂)','fraction',null,null],['pH','pH','',7.35,7.45],['PaCO2','PaCO₂','mmHg',35,45],['SaO2','Arterial O₂ sat (SaO₂)','%',95,100]]],
-  ['Chemistry',[['AST','AST','IU/L',10,40],['BUN','BUN','mg/dL',7,20],['Alkalinephos','Alkaline phosphatase','IU/L',44,147],['Calcium','Calcium','mg/dL',8.5,10.5],['Chloride','Chloride','mmol/L',96,106],['Creatinine','Creatinine','mg/dL',0.6,1.3],['Bilirubin_direct','Bilirubin, direct','mg/dL',0,0.3],['Bilirubin_total','Bilirubin, total','mg/dL',0.1,1.2],['Glucose','Glucose','mg/dL',70,140],['Lactate','Lactate','mmol/L',0.5,2],['Magnesium','Magnesium','mg/dL',1.7,2.2],['Phosphate','Phosphate','mg/dL',2.5,4.5],['Potassium','Potassium','mmol/L',3.5,5],['TroponinI','Troponin I','ng/mL',0,0.04]]],
-  ['Hematology & coagulation',[['Hct','Hematocrit','%',36,50],['Hgb','Hemoglobin','g/dL',12,17.5],['PTT','PTT','s',25,35],['WBC','White blood cells','×10⁹/L',4,12],['Fibrinogen','Fibrinogen','mg/dL',200,400],['Platelets','Platelets','×10⁹/L',150,450]]]
-];
-const yesNo=v=>v===1?'Yes':v===0?'No':v;
-// Demographic, stay and label columns. SepsisLabel is the dataset's outcome label and is never used for scoring.
-const psvContext=[['Age','Age',v=>`${Math.round(v)} yrs`],['Gender','Gender',v=>v===1?'Male':v===0?'Female':v],['Unit1','Medical ICU (Unit1)',yesNo],['Unit2','Surgical ICU (Unit2)',yesNo],['HospAdmTime','Hospital → ICU admit',v=>`${v} h`],['ICULOS','ICU length of stay',v=>`${v} h`]];
-const psvGroupTitles=psvGroups.map(([title])=>title);
-let datasetRows={patientId:null,rows:undefined},datasetRequest=0;
-// Dataset observation groups start collapsed; expanded groups stay open across 3-second refreshes.
-const openPsvGroups=new Set();
+// What the care team should do for each reason the score flags.
+const CARE_STEPS={
+  intake:['Meals','Offer preferred foods, smaller and more frequent meals, and snacks between meals. Start a 3-day food chart.'],
+  decline:['Appetite change','Ask about pain, mood, mouth problems or new medications that could explain eating less than usual.'],
+  weight:['Weight','Weigh twice a week and refer to the dietitian.'],
+  bmi:['Low body weight','Dietitian review for oral nutritional supplements or fortified foods.'],
+  fluids:['Hydration','Hydration rounds: offer a drink every hour while awake and record intake.'],
+  missed:['Missed meals','Find out why meals were refused and let the nurse know the same day.'],
+  chewing:['Chewing / swallowing','Check mouth and dentures; request a speech-language pathology swallow assessment.']
+};
+
+// ---------- Nutrition history (daily logs + daily scores) for the selected resident ----------
+let nutrition={patientId:null,rows:undefined},nutritionRequest=0;
+async function loadNutrition(){
+  const p=selected;
+  if(!p)return;
+  const request=++nutritionRequest;
+  let rows;
+  try{rows=(await api('/api/nutrition-history?patient='+encodeURIComponent(p.id))).rows;}catch{rows=null;}
+  if(request!==nutritionRequest||selected?.id!==p.id)return;
+  if(rows===null&&nutrition.patientId===p.id&&nutrition.rows)return; // keep the last good data on a polling hiccup
+  nutrition={patientId:p.id,rows};
+  renderNutrition();
+}
+const nutritionRows=()=>nutrition.patientId===selected?.id&&Array.isArray(nutrition.rows)?nutrition.rows:[];
 
 function renderList(){
   const query=$('#search').value.toLowerCase();
-  const shown=patients.filter(p=>(filter==='all'||(filter==='high'?tier(p)==='high':tier(p)==='stable'))&&`${p.name} ${p.id} ${p.bed}`.toLowerCase().includes(query)).sort((a,b)=>descending?b.risk-a.risk:a.risk-b.risk);
+  const shown=patients.filter(p=>(filter==='all'||(filter==='high'?['high','medium'].includes(tier(p)):tier(p)==='stable'))&&`${p.name} ${p.id} ${p.bed}`.toLowerCase().includes(query))
+    .sort((a,b)=>descending?(b.risk??-1)-(a.risk??-1):(a.risk??-1)-(b.risk??-1));
   $('#patient-list').innerHTML=shown.map(p=>{
-    const loc=residentLocation(p);
-    const beh=getBehavioralSignals(p)[0];
-    const isHigh=tier(p)==='high';
-    const isMed=tier(p)==='medium';
-    const tagText=isHigh?`${icon('utensils')} Skipped meals · Lethargy`:isMed?`${icon('utensils')} Appetite drop`:`${icon('check')} Baseline care`;
-    return `<button class="patient-row ${selected?.id===p.id?'selected':''}" data-id="${p.id}" aria-pressed="${selected.id===p.id}">
-      <div class="row-avatar ${tier(p)}">${initials(p)}</div>
+    const loc=residentLocation(p),t=tier(p),top=drivers(p)[0];
+    const tag=t==='unscored'?'No nutrition log yet':top&&t!=='stable'?`${icon('utensils')} ${esc(top.label)}`:`${icon('check')} Eating well`;
+    return `<button class="patient-row ${selected?.id===p.id?'selected':''}" data-id="${esc(p.id)}" aria-pressed="${selected?.id===p.id}">
+      <div class="row-avatar ${t}">${esc(initials(p))}</div>
       <div>
-        <strong>${p.name}</strong>
+        <strong>${esc(p.name)}</strong>
         <small>${loc.wing} · ${loc.room}</small>
-        <span class="row-tag ${tier(p)}">${tagText}</span>
+        <span class="row-tag ${t}">${tag}</span>
       </div>
-      <div class="row-risk ${tier(p)}">${p.risk===null?'—':p.risk+'%'}
-        <small>${isHigh?'Early Alert':isMed?'Watch':'Stable'}</small>
+      <div class="row-risk ${t}">${p.risk??'—'}
+        <small>${shortLabel(p)}</small>
       </div>
     </button>`;
   }).join('')||'<div class="empty">No matching residents</div>';
-  
   document.querySelectorAll('.patient-row').forEach(el=>el.onclick=()=>{
     selected=patients.find(p=>p.id===el.dataset.id);
     render();
   });
-}
-
-function drivers(p){
-  return fields.flatMap((f,i)=>(p.v[i]!==null&&f[3](p.v[i]))?[`${f[0]} ${p.v[i]} ${f[1]}`]:[]);
 }
 
 function render(){
@@ -157,204 +127,189 @@ function render(){
   renderList();
   $('.patient-detail').hidden=!selected;
   $('#export').disabled=!selected;
-  
+  renderSummaryCards();
   if(!selected){
-    $('#monitored-count').textContent='0';
-    $('#roster-count').textContent='0';
-    if($('#census-count')) $('#census-count').textContent='0';
-    if($('#chip-urgent-count')) $('#chip-urgent-count').textContent='0';
-    if($('#chip-watch-count')) $('#chip-watch-count').textContent='0';
-    if($('#chip-stable-count')) $('#chip-stable-count').textContent='0';
-    $('#average').textContent='—';
-    $('#high-stat').textContent='0';
-    $('#high-caption').textContent='0 active early alerts';
-    $('#alert-count').textContent='0';
-    $('#patient-list').innerHTML='<div class="empty">No residents yet. Click "Reset demo cohort" above.</div>';
+    $('#patient-list').innerHTML='<div class="empty">No residents yet. Run the nutrition replay to load residents.</div>';
     return;
   }
-  
-  const p=selected, s=scores(p.v), loc=residentLocation(p);
+  const p=selected,loc=residentLocation(p);
   $('#initials').textContent=initials(p);
   $('#patient-name').textContent=p.name;
-  $('#patient-meta').innerHTML=`ID: RES-${p.id} <span>·</span> ${loc.wing} <span>·</span> ${loc.room}`;
-  
+  $('#patient-meta').innerHTML=`ID: RES-${esc(p.id)} <span>·</span> ${loc.wing} <span>·</span> ${loc.room}`;
   for(const id of ['patient-badge','chart-badge']){
     $('#'+id).className=`badge ${tier(p)}`;
     $('#'+id).textContent=(id==='patient-badge'?'● ':'')+label(p);
   }
 
-  // Behavioral signals are no longer displayed but still feed the explanation, SBAR and export.
-  const behList=getBehavioralSignals(p);
+  renderResidentInfo(p);
 
-  // Render Physiological Vitals
-  $('#vitals').innerHTML=fields.map((f,i)=>`
-    <button type="button" data-vital="${i}" aria-label="View hourly ${f[0]} chart" class="vital ${(p.v[i]!==null&&f[3](p.v[i]))?'warning':''}">
+  // Supporting vitals.
+  const v=p.v||[];
+  $('#vitals').innerHTML=fields.map((f,i)=>{
+    const value=v[i]??null,out=value!==null&&f[3](value);
+    return `<button type="button" data-vital="${i}" aria-label="View hourly ${f[0]} chart" class="vital ${out?'warning':''}">
       <div class="vital-label">${icon(f[2])} ${f[0]}</div>
-      <div class="vital-value">${p.v[i]??'—'}<small>${f[1]}</small></div>
-      <div class="vital-status">${(p.v[i]!==null&&f[3](p.v[i]))?'Outside reference':p.v[i]===null?'Not measured':f[4]}</div>
+      <div class="vital-value">${value??'—'}<small>${f[1]}</small></div>
+      <div class="vital-status">${out?'Outside typical range':value===null?'Not measured':f[4]}</div>
       <span class="vital-chart-hint">View hourly chart ↗</span>
-    </button>
-  `).join('');
+    </button>`;
+  }).join('');
 
+  // Score, screening measures and the explanation all come from the stored NutriSense score.
   $('#risk-number').textContent=p.risk??'—';
-  $('#risk-change').textContent=p.risk===null?'Dataset observation · no risk model':p.risk>=70?'Elevated sepsis risk · immediate assessment':p.risk>=30?'Subtle changes detected · monitor closely':'Within normal baseline';
-  $('#qsofa').textContent=s.qsofa??'—';
-  $('#sirs').textContent=s.sirs??'—';
-  
-  for(const [id,n,total] of [['q-bars',s.qsofa,3],['s-bars',s.sirs,4]]){
-    $('#'+id).innerHTML=Array.from({length:total},(_,i)=>`<i class="${i<n?'on':''}"></i>`).join('');
-  }
+  $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':p.risk>=70?'High risk · review with the nurse today':p.risk>=30?'Early changes · monitor closely':'Eating, drinking and weight on track';
+  renderScreening(p);
+  renderExplanation(p);
 
-  // Risk Trend Line Chart
-  const vals=[8,10,9,13,12,21,19,29,34,31,48,55,p.risk-12,p.risk];
-  const points=vals.map((v,i)=>[35+i*540/(vals.length-1),155-Math.max(2,v)*1.35]);
-  const d=points.map(([x,y],i)=>`${i?'L':'M'}${x},${y}`).join(' ');
-  $('#chart-line').setAttribute('d',d);
-  $('#chart-area').setAttribute('d',`${d} L575,155 L35,155Z`);
-  $('#chart-point').setAttribute('cx','575');
-  $('#chart-point').setAttribute('cy',points.at(-1)[1]);
-  $('.chart').style.visibility=p.risk===null?'hidden':'visible';
+  if(nutrition.patientId!==p.id){nutrition={patientId:p.id,rows:undefined};loadNutrition();}
+  renderNutrition();
 
-  // Explainable AI Reasoning
-  const ds=drivers(p);
-  const behFlags=behList.filter(b=>b.warning);
-  
-  if(p.risk===null){
-    $('#explanation').textContent='Recorded dataset observations. No early risk score has been computed.';
-    $('#clinical-context').textContent='Awaiting laboratory analysis and full clinical assessment.';
-  } else if(p.risk>=70){
-    $('#explanation').innerHTML=`<strong>Why this resident was flagged early:</strong> SeptiSense synthesized <strong>${behFlags.length} daily living warning signs</strong> (including ${behFlags.map(b=>b.title.toLowerCase()).join(' and ')}) alongside <strong>${ds.length} abnormal physiological vital signs</strong> (${ds.slice(0,2).join(', ')}).`;
-    $('#clinical-context').textContent=`Senior residents frequently have 'silent sepsis' without fever. Here, the combination of acute tachypnea (RR ${p.v[1]}), cognitive lethargy (GCS ${p.v[5]}), and anorexia indicates systemic response requiring prompt bedside fluid hydration and urinalysis.`;
-  } else if(p.risk>=30){
-    $('#explanation').innerHTML=`<strong>Early monitoring alert:</strong> Mild early shifts noted. ${p.name} has decreased meal intake and slight respiratory change (${p.v[1]}/min). qSOFA is currently ${s.qsofa}/3.`;
-    $('#clinical-context').textContent=`Small signs like reduced fluid intake and slight unsteadiness often precede acute illness by 24–48 hours in long-term care settings. Catching this now avoids an emergency room transfer.`;
-  } else {
-    $('#explanation').textContent=`Observations and daily living logs are within normal baseline. Resident is eating well, mobile, and cognitively intact.`;
-    $('#clinical-context').textContent=`Routine daily surveillance continues across morning, afternoon, and night shift passes.`;
-  }
-
-  if(datasetRows.patientId!==p.id){datasetRows={patientId:p.id,rows:undefined};loadDatasetObservations();}
-  renderDatasetObservations();
-
-  $('#drivers').innerHTML=ds.slice(0,3).map(x=>`<span class="driver">↗ &nbsp;${x}</span>`).join('')||'<span class="driver">No physiological thresholds exceeded</span>';
-  
-  // KPI counts
-  const count=patients.filter(p=>p.risk>=70&&p.alert_status!=='acknowledged').length;
-  $('#high-stat').innerHTML=`0${count} <small>Needs early check</small>`;
-  $('#high-caption').textContent=`${count} active early alert${count===1?'':'s'}`;
-  $('#alert-count').textContent=count;
-  
-  const urgentCount = patients.filter(p=>p.risk>=70).length;
-  const watchCount = patients.filter(p=>p.risk!==null&&p.risk>=30&&p.risk<70).length;
-  const stableCount = patients.filter(p=>p.risk===null||p.risk<30).length;
-  if($('#chip-urgent-count')) $('#chip-urgent-count').textContent=urgentCount;
-  if($('#chip-watch-count')) $('#chip-watch-count').textContent=watchCount;
-  if($('#chip-stable-count')) $('#chip-stable-count').textContent=stableCount;
-
-  const scored=patients.filter(p=>p.risk!==null);
-  $('#average').textContent=scored.length?'85':'—';
-  $('#monitored-count').textContent=patients.length;
-  $('#roster-count').textContent=patients.length;
-  if($('#census-count')) $('#census-count').textContent=patients.length;
-  $('#review').disabled=p.risk===null;
-  $('#blink-btn').disabled=p.risk===null;
+  $('#review').disabled=!p.prediction_id;
+  $('#blink-btn').disabled=!p.prediction_id;
   $('#sbar-btn').disabled=p.risk===null;
 }
 
-// Latest recorded value for a PSV column; nothing is carried forward into later hours.
-function lastRecorded(rows,key){
-  for(let i=rows.length-1;i>=0;i--){const v=rows[i].raw_data[key];if(typeof v==='number')return {value:v,hour:Number(rows[i].hour)};}
-  return null;
-}
-const psvNumber=v=>Number.isInteger(v)?v:Number(v.toFixed(2));
-
-async function loadDatasetObservations(){
-  const p=selected;
-  if(!p)return;
-  const request=++datasetRequest;
-  let rows;
-  try{rows=(await api('/api/vital-history?patient='+encodeURIComponent(p.id))).rows;}catch{rows=null;}
-  if(request!==datasetRequest||selected?.id!==p.id)return;
-  // Keep the last good table on a transient polling failure.
-  if(rows===null&&datasetRows.patientId===p.id&&datasetRows.rows)return;
-  datasetRows={patientId:p.id,rows};
-  renderDatasetObservations();
-}
-
-// Always-visible stay & dataset context, shown where the behavioral signals used to be.
-// Without PSV rows (demo residents or still loading), age and sex come from the resident record.
-function renderStayContext(rows){
-  const box=$('#psv-context');
-  if(!selected||!box)return;
-  const fallback={Age:selected.age,Gender:selected.sex==='Male'?1:selected.sex==='Female'?0:undefined};
-  box.innerHTML=psvContext.map(([key,name,format])=>{
-    const last=rows?.length?lastRecorded(rows,key):null;
-    const value=last?last.value:fallback[key];
-    const shown=value===undefined||value===null?'—':format(psvNumber(value));
-    return `<div class="psv-cell ${shown==='—'?'missing':''}" title="${key}"><div class="psv-name">${name}</div><div class="psv-value">${shown}</div></div>`;
-  }).join('');
-  // Sepsis status badge beside the risk badge, from the dataset's SepsisLabel column.
-  const status=$('#sepsis-status'),label=rows?.length?lastRecorded(rows,'SepsisLabel'):null;
-  status.hidden=!label||(label.value!==0&&label.value!==1);
-  if(!status.hidden){
-    status.textContent=`Current status: ${label.value===1?'Positive':'Negative'}`;
-    status.className=`badge ${label.value===1?'high':''}`;
-    status.title=`SepsisLabel from the dataset, hour ${label.hour}`;
+// Screening profile shown under "Resident information": 37 fields in five groups (synthesized in the same
+// NHANES-style shape as the real survey, so a real file can replace it). Values that matter clinically are highlighted.
+const SCREENING_GROUPS=[
+  ['Demographics',[['age','Age'],['sex','Sex'],['race','Race/ethnicity'],['education','Education'],['marital','Marital status'],['income_ratio','Income ratio'],['exam_status','Exam status']]],
+  ['Body measures',[['weight_kg','Weight (kg)'],['bmi','BMI'],['height_cm','Height (cm)'],['arm_cm','Arm circ. (cm)'],['waist_cm','Waist (cm)'],['hip_cm','Hip (cm)']]],
+  ['Diet (24-h recall)',[['diet','Diet texture'],['recall_status','Recall status'],['kcal','Calories (kcal)'],['protein_g','Protein (g)'],['carbs_g','Carbs (g)'],['fat_g','Fat (g)'],['fiber_g','Fiber (g)'],['vit_d_ug','Vitamin D (µg)'],['b12_ug','Vitamin B12 (µg)'],['calcium_mg','Calcium (mg)'],['moisture_g','Water from diet (g)']]],
+  ['Vitals at screening',[['sbp1','Systolic BP 1'],['dbp1','Diastolic BP 1'],['sbp2','Systolic BP 2'],['dbp2','Diastolic BP 2'],['sbp3','Systolic BP 3'],['dbp3','Diastolic BP 3'],['pulse','Pulse']]],
+  ['Balance & falls',[['balance_exam','Balance exam'],['balance_test1','Balance test 1'],['balance_time_s','Balance time (s)'],['stands_unaided','Stands unaided'],['dizzy_24h','Dizzy (24 h)'],['dizzy_fall_12m','Dizzy fall (12 mo)']]]
+];
+// Returns a short reason when a screening value is a concern, otherwise null.
+function screeningConcern(key,v,sc){
+  if(v===null||v===undefined)return null;
+  switch(key){
+    case 'bmi':return v<21?'Low for an older adult':null;
+    case 'arm_cm':return v<22?'Under 22 cm suggests malnutrition':null;
+    case 'kcal':return v<1200?'Very low energy intake':null;
+    case 'protein_g':return sc.weight_kg&&v<sc.weight_kg?'Below 1 g per kg body weight':null;
+    case 'sbp1':case 'sbp2':case 'sbp3':return v<100?'Low':v>=160?'High':null;
+    case 'balance_test1':return v==='Fail'?'Failed balance test':null;
+    case 'stands_unaided':return v==='No'?'Needs help to stand':null;
+    case 'dizzy_24h':case 'dizzy_fall_12m':return v==='Yes'?'Fall risk':null;
+    default:return null;
   }
 }
-
-function renderDatasetObservations(){
-  const box=$('#psv-observations');
-  if(!selected||!box)return;
-  const rows=datasetRows.patientId===selected.id?datasetRows.rows:undefined;
-  renderStayContext(rows);
-  if(rows===undefined){box.innerHTML='<div class="psv-empty">Loading dataset observations…</div>';return;}
-  if(rows===null){box.innerHTML='<div class="psv-empty">Unable to load dataset observations. Retrying…</div>';return;}
-  if(!rows.length){
-    box.innerHTML='<div class="psv-empty">No PSV dataset rows for this resident. Demo residents only carry the eight core vitals above; replay a PSV folder to see every dataset column.</div>';
-    return;
-  }
-  const current=Number(rows.at(-1).hour);
-  let measuredTotal=0,total=0;
-  const group=(title,count,cells,flagged=0)=>{
-    const open=openPsvGroups.has(title);
-    return `<div class="psv-group ${open?'open':''}">
-      <button type="button" class="psv-group-head" data-psv-group="${psvGroupTitles.indexOf(title)}" aria-expanded="${open}">
+// Groups start collapsed; ones the user opens stay open across the 3-second refreshes.
+const openInfoGroups=new Set();
+function renderResidentInfo(p){
+  const sc=p.screening||{},prof=profile(p);
+  const value=key=>{
+    if(key==='diet')return prof.diet??null;
+    if(key==='age')return sc.age!==undefined?(sc.age_top_coded?'80+':sc.age):(p.age??null);
+    if(key==='sex')return sc.sex??(p.sex&&p.sex!=='Unknown'?p.sex:null);
+    if(key==='height_cm')return sc.height_cm??prof.height_cm??null;
+    return sc[key]??null;
+  };
+  $('#psv-context').innerHTML=SCREENING_GROUPS.map(([title,items])=>{
+    let flagged=0;
+    const cells=items.map(([key,name])=>{
+      const v=value(key),concern=screeningConcern(key,v,sc);
+      if(concern)flagged++;
+      const shown=typeof v==='number'?fmt(v,1):v;
+      return `<div class="psv-cell ${v===null?'missing':''} ${concern?'warning':''}" title="${esc(concern||name)}"><div class="psv-name">${esc(name)}</div><div class="psv-value">${esc(shown??'—')}</div>${concern?`<div class="psv-when">${esc(concern)}</div>`:''}</div>`;
+    }).join('');
+    const open=openInfoGroups.has(title);
+    return `<div class="info-group psv-group ${open?'open':''}">
+      <button type="button" class="psv-group-head" data-info-group="${esc(title)}" aria-expanded="${open}">
         <span><i class="psv-caret" aria-hidden="true">▸</i>${title}</span>
-        <small>${flagged?`<b>${flagged} outside range</b> · `:''}${count}</small>
+        <small>${flagged?`<b>${flagged} to note</b> · `:''}${items.length} fields</small>
       </button>
       ${open?`<div class="psv-grid">${cells}</div>`:''}
     </div>`;
-  };
-  const groups=psvGroups.map(([title,items])=>{
-    let measured=0,flagged=0;
-    const cells=items.map(([key,name,unit,low,high])=>{
-      total++;
-      const last=lastRecorded(rows,key);
-      const range=low===null?'':` · typical ${low}–${high} ${unit}`;
-      if(!last)return `<button type="button" class="psv-cell missing" data-psv="${key}" title="${name} (${key})${range}"><div class="psv-name">${name}</div><div class="psv-value">—</div><div class="psv-when">Not measured yet</div></button>`;
-      measured++;
-      const flag=low===null?'':last.value<low?' ↓':last.value>high?' ↑':'';
-      if(flag)flagged++;
-      const ago=current-last.hour;
-      return `<button type="button" class="psv-cell ${flag?'warning':''}" data-psv="${key}" title="${name} (${key})${range}">
-        <div class="psv-name">${name}</div>
-        <div class="psv-value">${psvNumber(last.value)}${flag}<small>${unit}</small></div>
-        <div class="psv-when">Hour ${last.hour}${ago?` · ${ago} h ago`:' · current'}</div>
-      </button>`;
-    }).join('');
-    measuredTotal+=measured;
-    return group(title,`${measured}/${items.length} measured`,cells,flagged);
-  });
-  box.innerHTML=groups.join('')+`
-    <p class="psv-note">Each value is the most recent recorded reading for that column; nothing is carried forward or imputed. Highlighting uses typical adult reference ranges and is for display only.</p>`;
+  }).join('')+(p.screening?'<p class="psv-note">Screening profile is synthesized for this prototype (NHANES-style fields); age 80 and over is shown as 80+.</p>':'<p class="psv-note">No screening profile for this resident yet. Run the nutrition replay to load one.</p>');
 }
 
-// Latest recorded value for every PSV column, for the JSON export.
-function datasetSnapshot(id){
-  if(datasetRows.patientId!==id||!datasetRows.rows?.length)return null;
-  const keys=[...psvGroups.flatMap(([,items])=>items.map(i=>i[0])),...psvContext.map(c=>c[0]),'SepsisLabel'];
-  return Object.fromEntries(keys.map(key=>[key,lastRecorded(datasetRows.rows,key)]));
+function renderSummaryCards(){
+  const scored=patients.filter(p=>p.risk!==null);
+  const open=patients.filter(p=>p.risk>=70&&p.alert_status!=='acknowledged').length;
+  $('#monitored-count').textContent=patients.length;
+  $('#roster-count').textContent=patients.length;
+  $('#high-stat').innerHTML=`${open} <small>Need review today</small>`;
+  $('#alert-count').textContent=open;
+  const intakes=scored.map(p=>summary(p).intake7).filter(v=>v!==null&&v!==undefined);
+  $('#avg-intake').textContent=intakes.length?fmt(intakes.reduce((a,b)=>a+b,0)/intakes.length):'—';
+  $('#losing-count').textContent=scored.filter(p=>(summary(p).weightChangePct??0)<=-2).length;
+  $('#chip-urgent-count').textContent=patients.filter(p=>tier(p)==='high').length;
+  $('#chip-watch-count').textContent=patients.filter(p=>tier(p)==='medium').length;
+  $('#chip-stable-count').textContent=patients.filter(p=>tier(p)==='stable').length;
+}
+
+function renderScreening(p){
+  const s=summary(p),flagged=new Set(drivers(p).map(d=>d.key));
+  const meter=(name,hint,value,display,percent,warn)=>`
+    <div class="screen-row ${warn?'warning':''}">
+      <div><strong>${name}</strong><small>${hint}</small></div>
+      <b>${display}</b>
+    </div>
+    <div class="meter ${warn?'warning':''}"><i style="width:${value===null||value===undefined?0:Math.max(2,Math.min(100,percent))}%"></i></div>`;
+  $('#screening').innerHTML=p.risk===null?'<p class="screen-empty">No nutrition log for this resident yet.</p>':
+    meter('Meal intake','7-day average · usual '+(s.baseline!==null&&s.baseline!==undefined?fmt(s.baseline)+'%':'n/a'),s.intake7,`${fmt(s.intake7)}%`,s.intake7,flagged.has('intake')||flagged.has('decline'))+
+    meter('Weight change','Since first weigh-in',s.weightChangePct,s.weightChangePct===null||s.weightChangePct===undefined?'—':`${s.weightChangePct>0?'+':''}${fmt(s.weightChangePct,1)}%`,Math.abs(s.weightChangePct??0)*10,flagged.has('weight'))+
+    meter('Fluids','3-day average · goal 1,500 mL',s.fluids3,`${fmt(s.fluids3)} mL`,(s.fluids3??0)/20,flagged.has('fluids'))+
+    meter('BMI','Older adults: below 21 is a concern',s.bmi,fmt(s.bmi,1),((s.bmi??15)-15)/15*100,flagged.has('bmi'));
+}
+
+function renderExplanation(p){
+  const ds=drivers(p),s=summary(p);
+  if(p.risk===null){
+    $('#explanation').textContent='No nutrition log for this resident yet, so no score has been calculated.';
+    $('#drivers').innerHTML='<span class="driver">No data</span>';
+    $('#clinical-context').textContent='Run the nutrition replay to load daily meal, fluid and weight records.';
+    $('#plan-steps').innerHTML='<li>Start recording meals, fluids and weekly weights.</li>';
+    return;
+  }
+  $('#explanation').innerHTML=ds.length
+    ?`<strong>Why ${esc(p.name)} was flagged:</strong> a score of ${p.risk}/100 built from ${ds.length} warning sign${ds.length===1?'':'s'} in the care logs — ${ds.map(d=>esc(d.label.toLowerCase())).join(', ')}.`
+    :`<strong>${esc(p.name)} is on track:</strong> eating ${fmt(s.intake7)}% of meals, drinking about ${fmt(s.fluids3)} mL a day, and weight is steady.`;
+  $('#drivers').innerHTML=ds.length?ds.map(d=>`<span class="driver" title="+${d.points} points">↗ ${esc(d.label)} · ${esc(d.detail)}</span>`).join(''):'<span class="driver">No warning signs</span>';
+  $('#clinical-context').innerHTML=`Weight loss in older adults is often noticed late, after weeks of eating less. NutriSense watches each resident's own normal so small, steady drops show up early.${s.latestNote?` <br><br><strong>Latest CNA note:</strong> “${esc(s.latestNote)}”`:''}`;
+  const steps=[...new Set(ds.map(d=>d.key))].filter(k=>CARE_STEPS[k]).map(k=>`<li><strong>${CARE_STEPS[k][0]}:</strong> ${CARE_STEPS[k][1]}</li>`);
+  if(p.risk>=70)steps.push('<li><strong>Nurse review:</strong> Assess today and share the SBAR handoff with the physician.</li>');
+  $('#plan-steps').innerHTML=steps.join('')||'<li><strong>Routine:</strong> Continue recording meals and fluids each shift and weighing weekly.</li>';
+}
+
+// Daily nutrition cards, the risk trajectory and the context strip need the day-by-day logs.
+function renderNutrition(){
+  if(!selected)return;
+  const p=selected,rows=nutritionRows(),last=rows.at(-1),s=summary(p),flagged=new Set(drivers(p).map(d=>d.key));
+  const weighed=[...rows].reverse().find(r=>r.weight_kg!==null);
+  $('#nutrition-context').innerHTML=last
+    ?`<span>Monitoring <b>day ${last.day} of ${rows.length}</b></span><span>Last weighed <b>${weighed?`${fmt(weighed.weight_kg,1)} kg · day ${weighed.day}`:'—'}</b></span><span>Diet <b>${esc(profile(p).diet||'—')}</b></span><span>Attending <b>Dr. Sarah Chen</b></span>`
+    :'<span>No nutrition log yet</span>';
+  const card=(key,iconName,title,value,unit,status,warn)=>`
+    <button type="button" class="vital ${warn?'warning':''}" data-nutri="${key}" aria-label="View daily ${title} chart" ${last?'':'disabled'}>
+      <div class="vital-label">${icon(iconName)} ${title}</div>
+      <div class="vital-value">${value}<small>${unit}</small></div>
+      <div class="vital-status">${status}</div>
+      <span class="vital-chart-hint">View daily chart ↗</span>
+    </button>`;
+  const today=last?mealAvg(last):null;
+  $('#nutrition-cards').innerHTML=!last?'<div class="psv-empty">No nutrition log for this resident yet.</div>':
+    card('meals','utensils','Meals eaten today',fmt(today),'%',`7-day avg ${fmt(s.intake7)}% · usual ${s.baseline!==null&&s.baseline!==undefined?fmt(s.baseline)+'%':'n/a'}`,flagged.has('intake')||flagged.has('decline'))+
+    card('fluids','droplet','Fluids today',fmt(last.fluids_ml),'mL',`3-day avg ${fmt(s.fluids3)} mL · goal 1,500`,flagged.has('fluids'))+
+    card('weight','gauge','Weight',fmt(s.weight,1),'kg',s.weightChangePct===null||s.weightChangePct===undefined?'Weighed weekly':`${s.weightChangePct>0?'+':''}${fmt(s.weightChangePct,1)}% since day 1`,flagged.has('weight')||flagged.has('bmi'))+
+    card('risk','mind','Appetite today',esc(last.appetite||'—'),'',last.chewing_difficulty?'Chewing / swallowing difficulty noted':esc(last.note||'No CNA note today'),last.appetite==='Poor'||flagged.has('chewing'));
+
+  // Risk trajectory: the real daily NutriSense score.
+  const series=rows.filter(r=>r.risk!==null&&r.risk!==undefined);
+  const show=p.risk!==null&&series.length>1;
+  $('.chart').hidden=!show;
+  $('.chart-legend').hidden=!show;
+  $('.risk-panel').classList.toggle('compact',!show);
+  $('#trajectory-tag').textContent=series.length?`Daily score · ${series.length} days`:'Daily score';
+  if(!show)return;
+  const x=i=>35+i*540/(series.length-1),y=v=>155-Math.max(1,v)*1.35;
+  const d=series.map((r,i)=>`${i?'L':'M'}${x(i)},${y(r.risk)}`).join(' ');
+  $('#chart-line').setAttribute('d',d);
+  $('#chart-area').setAttribute('d',`${d} L575,155 L35,155Z`);
+  $('#chart-point').setAttribute('cx',x(series.length-1));
+  $('#chart-point').setAttribute('cy',y(series.at(-1).risk));
+  const ticks=6,labels=Array.from({length:ticks},(_,i)=>series[Math.round(i*(series.length-1)/(ticks-1))].day);
+  $('.chart-times').innerHTML=labels.map((day,i)=>`<span>${i===ticks-1?'Today':'Day '+day}</span>`).join('');
 }
 
 function notify(text){
@@ -369,151 +324,157 @@ function modal(title,body){
   if(!$('#modal').open)$('#modal').showModal();
 }
 
-async function payload(p){
-  const snapshot=structuredClone(p);
-  const timestamp=new Date().toISOString();
-  const vitals=Object.fromEntries(fields.map((f,i)=>[f[0],snapshot.v[i]]));
-  const canonical=JSON.stringify({patient_id:`RES-${snapshot.id}`,timestamp,vitals});
-  const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(canonical))),b=>b.toString(16).padStart(2,'0')).join('');
+function payload(p){
   return {
-    patient_id: `RES-${snapshot.id}`,
-    resident_name: snapshot.name,
-    timestamp,
-    vitals,
-    vitals_hash: hash,
-    risk_score: snapshot.risk===null?null:snapshot.risk/100,
-    risk_tier: label(snapshot),
-    scores: scores(snapshot.v),
-    key_drivers: drivers(snapshot),
-    dataset_observations: datasetSnapshot(snapshot.id),
-    behavioral_signals: getBehavioralSignals(snapshot),
-    recommended_action: 'Initiate 30ml/kg oral/IV hydration bundle & obtain point-of-care urinalysis within 60 minutes.',
-    blink_summary: `SeptiSense early warning (${snapshot.risk}%). ${drivers(snapshot).slice(0,3).join('; ')}. Care team review requested.`,
-    simulation: true,
-    model: 'Early Sepsis Detection Sentinel v1.0',
-    action_url: snapshot.risk>=70?`/api/actions/sepsis-alert?patient=RES-${snapshot.id}&risk=${snapshot.risk/100}&hash=${hash}`:null
+    resident_id:`RES-${p.id}`,
+    resident_name:p.name,
+    exported_at:new Date().toISOString(),
+    malnutrition_risk_score:p.risk,
+    risk_tier:label(p),
+    reasons:drivers(p),
+    nutrition_summary:summary(p),
+    profile:{age:p.age,sex:p.sex,...profile(p)},
+    screening:p.screening||null,
+    daily_logs:nutritionRows(),
+    supporting_vitals:Object.fromEntries(fields.map((f,i)=>[f[0],(p.v||[])[i]??null])),
+    assessment_hash:p.hash||null,
+    model:'NutriSense rule-based score (nutrition_rules_v1)',
+    action_url:p.prediction_id?`/api/actions/nutrition-review?prediction=${p.prediction_id}`:null
   };
 }
 
-// Generate SBAR Clinical Handoff for Doctors / Care Team
-async function showSbarModal(){
-  if(!selected) return;
-  const p=selected, s=scores(p.v), loc=residentLocation(p), beh=getBehavioralSignals(p);
-  const ds=drivers(p);
-  
-  const sbarText = `SBAR CLINICAL REPORT · EARLY SEPSIS DETECTION SENTINEL
-Facility: Sepsis Hospital
+// SBAR handoff built from the real score, reasons and logs.
+function showSbarModal(){
+  if(!selected)return;
+  const p=selected,loc=residentLocation(p),s=summary(p),ds=drivers(p),prof=profile(p);
+  const steps=[...new Set(ds.map(d=>d.key))].filter(k=>CARE_STEPS[k]).map(k=>CARE_STEPS[k][1]);
+  const sbarText=`SBAR NUTRITION HANDOFF · NUTRISENSE
+Facility: Maplewood Senior Living
 Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
 
 [SITUATION]
-Resident: ${p.name} (${loc.room}, ${loc.wing})
-Age: ${p.age} years | Gender: ${p.sex} | Resident ID: RES-${p.id}
-Primary Concern: Early warning for sepsis/deterioration flagged (Risk score: ${p.risk}%).
+Resident: ${p.name} (${loc.room}, ${loc.wing}) · ID RES-${p.id}
+Age ${p.age} · ${p.sex} · Diet: ${prof.diet||'—'}
+Malnutrition risk score ${p.risk}/100 (${label(p)}).
 
 [BACKGROUND]
-Admitted for post-acute care and recovery. Normal baseline: alert, ambulatory with assist x1.
+Daily meal, fluid and weight records over ${s.day??'—'} days. Usual meal intake ${s.baseline!==null&&s.baseline!==undefined?fmt(s.baseline)+'%':'not yet established'}.
 
 [ASSESSMENT]
-1. Daily Living & Behavioral Warning Signs:
-${beh.map(b=>`   - ${b.title}: ${b.value} (${b.detail})`).join('\n')}
-2. Physiological Vitals & Laboratory Markers:
-   - Heart Rate: ${p.v[0]} bpm | Resp Rate: ${p.v[1]}/min | Blood Pressure: ${p.v[2]} mmHg
-   - Temperature: ${p.v[3]} °C | SpO2: ${p.v[4]}% | GCS Mentation: ${p.v[5]}
-   - WBC: ${p.v[6] || 'Pending'} | Lactate: ${p.v[7] || 'Pending'} mmol/L
-3. Clinical Screening Scores:
-   - qSOFA Score: ${s.qsofa}/3 | SIRS Criteria: ${s.sirs}/4
-4. AI Early Warning Findings:
-   - ${ds.join(', ') || 'Within screening parameters'}
-
+- Meals: ${fmt(s.intake7)}% eaten (7-day average)
+- Weight: ${fmt(s.weight,1)} kg, ${s.weightChangePct===null||s.weightChangePct===undefined?'no change data':`${s.weightChangePct>0?'+':''}${fmt(s.weightChangePct,1)}% since first weigh-in`}; BMI ${fmt(s.bmi,1)}
+- Fluids: ${fmt(s.fluids3)} mL/day (3-day average)
+- Warning signs: ${ds.length?ds.map(d=>`${d.label} (${d.detail})`).join('; '):'none'}
+${s.latestNote?`- Latest CNA note: "${s.latestNote}"\n`:''}
 [RECOMMENDATION]
-1. Immediate bedside assessment by charge nurse.
-2. Push oral/IV hydration (250–500 mL bolus) to prevent acute tissue hypoperfusion.
-3. Order point-of-care urinalysis and CBC.
-4. Physician sign-off requested via Solana Blink protocol.`;
-
-  modal('SBAR Clinical Handoff Report', `
+${(steps.length?steps:['Continue routine monitoring.']).map((t,i)=>`${i+1}. ${t}`).join('\n')}
+${steps.length+1}. Physician review and sign-off via Solana Blink.`;
+  modal('SBAR Nutrition Handoff',`
     <div class="sbar-modal-content">
       <div class="sbar-badge-row">
-        <span class="badge ${tier(p)}">${p.name} · ${p.risk}% Risk</span>
-        <span class="sbar-format-tag">Standard Geriatric Protocol</span>
+        <span class="badge ${tier(p)}">${esc(p.name)} · ${p.risk}/100</span>
+        <span class="sbar-format-tag">Generated from care logs</span>
       </div>
-      <p class="sbar-intro">Ready for shift handoff, physician consultation, or EHR export.</p>
-      <textarea class="sbar-textarea" id="sbar-text" readonly rows="14">${sbarText}</textarea>
+      <p class="sbar-intro">Ready for shift handoff, dietitian referral or physician review.</p>
+      <textarea class="sbar-textarea" id="sbar-text" readonly rows="16">${esc(sbarText)}</textarea>
       <div class="sbar-actions">
         <button class="button dark" id="copy-sbar">${icon('clipboard')} Copy SBAR to Clipboard</button>
         <button class="button secondary" id="close-sbar-btn">Close</button>
       </div>
-    </div>
-  `);
-
-  $('#copy-sbar').onclick=()=>{
-    navigator.clipboard.writeText(sbarText).then(()=>{
-      notify('SBAR clinical report copied to clipboard!');
-    }).catch(()=>{
-      notify('Unable to access clipboard. Please copy manually.');
-    });
-  };
+    </div>`);
+  $('#copy-sbar').onclick=()=>navigator.clipboard.writeText(sbarText).then(()=>notify('SBAR copied to clipboard')).catch(()=>notify('Unable to access clipboard. Please copy manually.'));
   $('#close-sbar-btn').onclick=()=>$('#modal').close();
 }
 
-// Review Solana Blink Modal
+// ---- Solana Blink ----
+// The dialog is a small blink client: it reads the Action served by /api/actions/nutrition-review (the same URL a
+// wallet or dial.to would use), has the browser wallet sign and send the transaction, then posts the signature
+// back so the server can verify it on devnet before recording the receipt.
+const B58='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function base58(bytes){
+  let n=0n;for(const b of bytes)n=n*256n+BigInt(b);
+  let out='';while(n>0n){out=B58[Number(n%58n)]+out;n/=58n;}
+  for(const b of bytes){if(b!==0)break;out='1'+out;}
+  return out;
+}
+const walletProvider=()=>window.phantom?.solana||(window.solana?.isPhantom?window.solana:null);
+async function actionFetch(path,data){
+  const r=await fetch(path,{method:data?'POST':'GET',headers:{'Content-Type':'application/json','Accept':'application/json'},body:data?JSON.stringify(data):undefined});
+  const result=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(result.message||result.error||'Request failed');
+  return result;
+}
+
 async function review(){
-  await pendingSave;
   const current=selected;
-  const p=await payload(current);
-  if(current.hash){
-    p.vitals_hash=current.hash;
-    p.action_url=current.alert_id?'/api/actions/sepsis-alert?alert='+current.alert_id:null;
-  }
-  
-  modal('Solana Blink · Emergency Order Protocol', `
+  if(!current?.prediction_id)return;
+  const href=`/api/actions/nutrition-review?prediction=${current.prediction_id}`;
+  modal('Solana Blink','<p>Loading action…</p>');
+  let action;
+  try{action=await actionFetch(href);}
+  catch(e){$('#modal-body').innerHTML=`<p>${esc(e.message)}</p>`;return;}
+  $('#modal-body').innerHTML=`
     <div class="blink-preview-card">
       <div class="blink-header">
-        <span class="blink-logo">${icon('zap')} SOLANA BLINK ACTION</span>
-        <span class="badge ${tier(selected)}">${p.risk_tier} · ${Math.round(p.risk_score*100)}%</span>
+        <span class="blink-logo">${icon('zap')} SOLANA BLINK · DEVNET</span>
+        <span class="badge ${tier(current)}">${esc(label(current))}</span>
       </div>
-      <h3>Code Sepsis Early Protocol: ${p.resident_name}</h3>
-      <p>${p.blink_summary}</p>
-      <div class="blink-order-box">
-        <strong>Authorized Clinical Order Bundle:</strong>
-        <ul>
-          <li>${icon('check')} Bedside IV Crystalloid Resuscitation (30 ml/kg)</li>
-          <li>${icon('check')} Point-of-Care Blood & Urine Culture Labs</li>
-          <li>${icon('check')} Continuous SpO2 & Respiratory Monitoring</li>
-        </ul>
+      <div class="blink-card">
+        <img class="blink-icon" src="${esc(action.icon)}" alt="">
+        <div><h3>${esc(action.title)}</h3><p>${esc(action.description)}</p></div>
       </div>
-      <p><strong>SHA-256 Observation Receipt (On-Chain Audit):</strong></p>
-      <code>${p.vitals_hash}</code>
-      <p><small>${p.action_url?'Solana Action URL ready for mobile wallet or clinical EHR integration.':'Resident is below the 70% emergency order threshold.'}</small></p>
       <div class="blink-btn-row">
-        <button class="button dark" id="acknowledge">Acknowledge & Sign Receipt</button>
-        <button class="button" id="copy-blink-link">Copy Action Link</button>
+        ${action.links.actions.map((a,i)=>`<button class="button dark" data-blink-action="${i}">${icon('zap')} ${esc(a.label)}</button>`).join('')}
+        <button class="button" id="copy-blink-link">Copy Blink link</button>
       </div>
-      <p class="blink-footnote"><small>Fast 400ms Solana Devnet finality · Tamper-proof Golden Hour audit log</small></p>
-    </div>
-  `);
-
-  $('#acknowledge').disabled=!current.alert_id||current.alert_status==='acknowledged';
-  $('#acknowledge').textContent=current.alert_status==='acknowledged'?'Already acknowledged on-chain':'Acknowledge & Sign Receipt';
-  
-  $('#acknowledge').onclick=async()=>{
-    try{
-      await api('/api/acknowledge',{alert_id:current.alert_id});
-      await refresh();
-      $('#modal').close();
-      notify('Acknowledgment logged to Tiger Data & Solana audit trail!');
-    }catch(e){
-      notify(e.message);
-    }
-  };
-
+      <div class="blink-status" id="blink-status" role="status" hidden></div>
+      <p class="blink-footnote"><small>Needs a browser wallet such as Phantom set to Devnet, with a little devnet SOL for the fee.</small></p>
+    </div>`;
+  document.querySelectorAll('[data-blink-action]').forEach(button=>{
+    button.onclick=()=>signAction(action.links.actions[Number(button.dataset.blinkAction)].href,button);
+  });
   $('#copy-blink-link').onclick=()=>{
-    const link = `solana-action:${window.location.origin}${p.action_url||'/api/actions/sepsis-alert?patient=RES-'+p.patient_id}`;
-    navigator.clipboard.writeText(link).then(()=>{
-      notify('Solana Action Link copied!');
-    });
+    navigator.clipboard.writeText(`solana-action:${location.origin}${href}`)
+      .then(()=>notify('Blink link copied'))
+      .catch(()=>notify('Unable to access clipboard'));
   };
 }
+
+async function signAction(actionHref,button){
+  const box=$('#blink-status');
+  const status=(html,kind='')=>{box.hidden=false;box.className=`blink-status ${kind}`;box.innerHTML=html;};
+  const provider=walletProvider();
+  if(!provider){status('No Solana wallet found. Install Phantom, switch it to Devnet, then reload this page.','error');return;}
+  button.disabled=true;
+  try{
+    status('Connecting wallet…');
+    const {publicKey}=await provider.connect();
+    const account=publicKey.toString();
+    status('Preparing transaction…');
+    const tx=await actionFetch(actionHref,{account});
+    const bytes=Uint8Array.from(atob(tx.transaction),c=>c.charCodeAt(0));
+    status('Approve the transaction in your wallet…');
+    // Phantom expects the whole unsigned transaction (empty signature slot + message), base58-encoded.
+    // Some older wallet builds expect only the message, so retry with that if the wallet cannot parse it.
+    let result;
+    try{
+      result=await provider.request({method:'signAndSendTransaction',params:{message:base58(bytes)}});
+    }catch(e){
+      if(!/buffer|deserializ|invalid transaction/i.test(e?.message||''))throw e;
+      result=await provider.request({method:'signAndSendTransaction',params:{message:base58(bytes.slice(1+64*bytes[0]))}});
+    }
+    const signature=result.signature;
+    status('Waiting for devnet confirmation…');
+    const done=await actionFetch(tx.links.next.href,{account,signature});
+    status(`${icon('check')} ${esc(done.description)} <a href="${esc(done.explorer)}" target="_blank" rel="noopener">View on Solana Explorer ↗</a>`,'success');
+    notify(done.acknowledged?'Review signed and alert acknowledged':'Review signed on Solana devnet');
+    await refresh();
+  }catch(e){
+    status(esc(e?.message||'Signing was cancelled'),'error');
+    button.disabled=false;
+  }
+}
+
 
 $('#review').onclick=review;
 $('#blink-btn').onclick=review;
@@ -536,58 +497,17 @@ document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{
   renderList();
 });
 
-// Role Switcher (CNA / Director / Physician)
-document.querySelectorAll('[data-role]').forEach(btn=>{
-  btn.onclick=()=>{
-    activeRole=btn.dataset.role;
-    document.querySelectorAll('[data-role]').forEach(x=>x.classList.toggle('active',x===btn));
-    if(activeRole==='cna'){
-      $('#user-avatar').textContent='MR';
-      $('#user-name').textContent='Maria Rodriguez';
-      $('#user-role-label').textContent='Certified Nursing Assistant (CNA)';
-      $('#header-breadcrumb').textContent='CNA Shift Log & Behavioral Monitoring';
-      notify('Switched to CNA Shift View: Highlighting meal intake & mobility changes.');
-    } else if(activeRole==='director'){
-      $('#user-avatar').textContent='KW';
-      $('#user-name').textContent='Karen White, RN';
-      $('#user-role-label').textContent='Wellness & Nursing Director';
-      $('#header-breadcrumb').textContent='Unit-Wide Prevention & Protocol Compliance';
-      notify('Switched to Director View: Tracking facility-wide ER diversion metrics.');
-    } else {
-      $('#user-avatar').textContent='SC';
-      $('#user-name').textContent='Dr. Sarah Chen';
-      $('#user-role-label').textContent='Attending Physician · Geriatrics';
-      $('#header-breadcrumb').textContent='Physician Triage & Order Protocol';
-      notify('Switched to Physician View: Diagnostic scores & Solana Blink orders active.');
-    }
-  };
-});
-
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
   if(b.dataset.view==='alerts'){
-    modal('Early Alert Center', patients.filter(p=>p.risk>=70&&p.alert_status!=='acknowledged').map(p=>`
+    modal('Early Alert Center',patients.filter(p=>p.risk>=70&&p.alert_status!=='acknowledged').map(p=>`
       <div class="audit-item">
-        <strong>${p.name}</strong> · RES-${p.id}
-        <p>${p.risk===null?'—':p.risk+'%'} early sepsis probability · charge nurse review requested</p>
-        <button class="button" data-review="${p.id}">Review alert ↗</button>
-      </div>
-    `).join('')||'<p>No residents currently above the early alert threshold.</p>');
-    
+        <strong>${esc(p.name)}</strong> · RES-${esc(p.id)}
+        <p>Malnutrition risk ${p.risk}/100 · ${esc(drivers(p).slice(0,2).map(d=>d.label).join(', ')||'review requested')}</p>
+        <button class="button" data-review="${esc(p.id)}">Review alert ↗</button>
+      </div>`).join('')||'<p>No residents currently above the alert threshold.</p>');
     document.querySelectorAll('[data-review]').forEach(x=>{
-      x.onclick=()=>{
-        selected=patients.find(p=>p.id===x.dataset.review);
-        render();
-        review();
-      };
+      x.onclick=()=>{selected=patients.find(p=>p.id===x.dataset.review);render();review();};
     });
-  } else if(b.dataset.view==='audit'){
-    modal('On-Chain & Database Audit Trail', audit.length?audit.map(a=>`
-      <div class="audit-item">
-        <small>${a.time}</small>
-        ${a.text}
-        <code>${a.hash}</code>
-      </div>
-    `).join(''):'<p>No actions recorded yet. Acknowledge an alert to record a receipt.</p>');
   } else {
     $('#search').value='';
     filter='all';
@@ -596,18 +516,17 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
   }
 });
 
-$('#export').onclick=async()=>{
-  const p=await payload(selected);
+$('#export').onclick=()=>{
+  const p=payload(selected);
   const url=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));
   const a=document.createElement('a');
   a.href=url;
-  a.download=`septisense-resident-${p.patient_id}.json`;
+  a.download=`nutrisense-resident-${p.resident_id}.json`;
   a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  notify('Resident care report exported as JSON');
+  notify('Resident nutrition report exported as JSON');
 };
 
-let runId=crypto.randomUUID(),pendingSave=Promise.resolve();
 async function api(path,data){
   const r=await fetch(path,{method:data?'POST':'GET',headers:data?{'Content-Type':'application/json'}:{},body:data?JSON.stringify(data):undefined});
   const result=await r.json();
@@ -616,131 +535,131 @@ async function api(path,data){
 }
 
 async function refresh(){
-  const [rows,events]=await Promise.all([api('/api/patients'),api('/api/audit')]);
+  const rows=await api('/api/patients');
   const id=selected?.id;
   patients.splice(0,patients.length,...rows);
-  selected=patients.find(p=>p.id===id)||patients[0];
-  audit.splice(0,audit.length,...events.map(e=>({...e,time:new Date(e.time).toLocaleString()})));
+  selected=patients.find(p=>p.id===id)||[...patients].sort((a,b)=>(b.risk??-1)-(a.risk??-1))[0];
   render();
-  loadDatasetObservations();
-  $('.system').innerHTML='<span class="dot"></span> Patient database connected<small>Auto-refresh every 3 seconds</small>';
+  loadNutrition();
+  $('.system').innerHTML='<span class="dot"></span> Resident database connected<small>Auto-refresh every 3 seconds</small>';
 }
 
 async function initializeDashboard(){
-  try{
-    await refresh();
-    original=structuredClone(patients[0]);
-  }catch(e){
+  try{await refresh();}
+  catch(e){
     $('.system').textContent='Database unavailable';
     $('#patient-list').innerHTML='<div class="empty">Unable to load residents. Check the server and reload.</div>';
     for(const id of ['review','export','blink-btn','sbar-btn'])$('#'+id).disabled=true;
     notify(e.message);
   }
 }
-
 initializeDashboard();
 
 let polling=false;
 setInterval(async()=>{
-  if(polling||timer)return;
+  if(polling)return;
   polling=true;
-  try{
-    await pendingSave;
-    await refresh();
-  }catch{ 
-    $('.system').textContent='Connection interrupted · retrying'; 
-  }finally{
-    polling=false;
-  }
+  try{await refresh();}
+  catch{$('.system').textContent='Connection interrupted · retrying';}
+  finally{polling=false;}
 },3000);
 
-// Vital history modal
-const vitalKeys=['HR','Resp','SBP','Temp','O2Sat','GCS','WBC','Lactate'];
+// ---------- History charts: hourly vitals (PSV replay) or daily nutrition logs ----------
+const NUTRITION_SERIES={
+  meals:['Meals eaten','%',r=>mealAvg(r)],
+  fluids:['Fluids','mL',r=>r.fluids_ml],
+  weight:['Weight','kg',r=>r.weight_kg],
+  risk:['Malnutrition risk score','/100',r=>r.risk]
+};
 let historySelection=null,historyRequest=0;
 
 $('#vitals').addEventListener('click',event=>{
   const button=event.target.closest('[data-vital]');
   if(!button)return;
-  const index=Number(button.dataset.vital);
-  openHistory(vitalKeys[index],fields[index][0],fields[index][1]);
+  const i=Number(button.dataset.vital);
+  openHistory({source:'vitals',key:vitalKeys[i],label:fields[i][0],unit:fields[i][1]});
 });
-
-$('#psv-observations').addEventListener('click',event=>{
-  const toggle=event.target.closest('[data-psv-group]');
-  if(toggle){
-    const title=psvGroupTitles[Number(toggle.dataset.psvGroup)];
-    if(openPsvGroups.has(title))openPsvGroups.delete(title);else openPsvGroups.add(title);
-    renderDatasetObservations();
-    $(`[data-psv-group="${toggle.dataset.psvGroup}"]`)?.focus();
-    return;
-  }
-  const button=event.target.closest('[data-psv]');
+$('#psv-context').addEventListener('click',event=>{
+  const head=event.target.closest('[data-info-group]');
+  if(!head)return;
+  const title=head.dataset.infoGroup;
+  if(openInfoGroups.has(title))openInfoGroups.delete(title);else openInfoGroups.add(title);
+  renderResidentInfo(selected);
+  $(`[data-info-group="${CSS.escape(title)}"]`)?.focus();
+});
+$('#nutrition-cards').addEventListener('click',event=>{
+  const button=event.target.closest('[data-nutri]');
   if(!button)return;
-  const item=psvGroups.flatMap(([,items])=>items).find(i=>i[0]===button.dataset.psv);
-  if(item)openHistory(item[0],item[1],item[2]);
+  const [labelText,unit]=NUTRITION_SERIES[button.dataset.nutri];
+  openHistory({source:'nutrition',key:button.dataset.nutri,label:labelText,unit});
 });
+$('.chart').addEventListener('click',()=>openHistory({source:'nutrition',key:'risk',label:NUTRITION_SERIES.risk[0],unit:'/100'}));
 
-function openHistory(key,label,unit){
-  historySelection={patientId:selected.id,name:selected.name,key,label,unit};
-  modal(`${label} · ${selected.name}`,'<p>Loading hourly observations…</p>');
-  loadVitalHistory();
+function openHistory(selection){
+  historySelection={patientId:selected.id,name:selected.name,...selection};
+  modal(`${selection.label} · ${selected.name}`,'<p>Loading…</p>');
+  loadHistory();
 }
 
 $('#modal').addEventListener('close',()=>{historySelection=null;historyRequest++;});
 
-async function loadVitalHistory(){
+async function loadHistory(){
   const selection=historySelection;
   if(!selection||!$('#modal').open)return;
   const request=++historyRequest;
   try{
-    const data=await api('/api/vital-history?patient='+encodeURIComponent(selection.patientId));
+    const daily=selection.source==='nutrition';
+    const data=await api((daily?'/api/nutrition-history':'/api/vital-history')+'?patient='+encodeURIComponent(selection.patientId));
     if(request!==historyRequest||historySelection!==selection||!$('#modal').open)return;
-    const field=[selection.label,selection.unit],key=selection.key;
-    const rows=data.rows.map(r=>({hour:Number(r.hour),value:typeof r.raw_data[key]==='number'?r.raw_data[key]:null}));
+    const unit=selection.unit,step=daily?'Day':'Hour';
+    const rows=daily
+      ?data.rows.map(r=>({t:Number(r.day),value:NUTRITION_SERIES[selection.key][2](r)??null}))
+      :data.rows.map(r=>({t:Number(r.hour),value:typeof r.raw_data[selection.key]==='number'?r.raw_data[selection.key]:null}));
+    rows.forEach(r=>{if(r.value!==null)r.value=Math.round(r.value*10)/10;});
     const measured=rows.filter(r=>r.value!==null);
     if(!measured.length){
-      $('#modal-body').innerHTML='<div class="history-empty">No recorded measurements for this vital yet.<small>Missing readings are not treated as zero.</small></div>';
+      $('#modal-body').innerHTML='<div class="history-empty">No recorded measurements yet.<small>Missing readings are not treated as zero.</small></div>';
       return;
     }
     const width=680,height=270,left=55,right=22,top=22,bottom=43;
-    const first=rows[0].hour,last=rows.at(-1).hour;
+    const first=rows[0].t,last=rows.at(-1).t;
     const values=measured.map(r=>r.value),min=Math.min(...values),max=Math.max(...values),padding=(max-min)*.15||Math.abs(max)*.1||1;
-    // Some PSV columns (base excess, hospital admit time) are legitimately negative.
     const low=min>=0?Math.max(0,min-padding):min-padding,high=max+padding;
-    const x=h=>left+(h-first)/Math.max(last-first,1)*(width-left-right);
+    const x=t=>left+(t-first)/Math.max(last-first,1)*(width-left-right);
     const y=v=>height-bottom-(v-low)/(high-low)*(height-top-bottom);
-    const fmt=v=>Number(v.toFixed(2));
+    const f=v=>Number(v.toFixed(1));
     let grid='';
     for(let i=0;i<5;i++){
       const value=low+(high-low)*i/4;
-      grid+=`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="#e4ebe5"/><text x="${left-10}" y="${y(value)+4}" text-anchor="end">${fmt(value)}</text>`;
+      grid+=`<line x1="${left}" x2="${width-right}" y1="${y(value)}" y2="${y(value)}" stroke="#e9e9e9"/><text x="${left-10}" y="${y(value)+4}" text-anchor="end">${f(value)}</text>`;
     }
     const ticks=new Set(Array.from({length:Math.min(7,last-first+1)},(_,i)=>Math.round(first+(last-first)*i/Math.max(1,Math.min(6,last-first)))));
-    for(const hour of ticks)grid+=`<text x="${x(hour)}" y="${height-20}" text-anchor="middle">${hour}</text>`;
+    for(const t of ticks)grid+=`<text x="${x(t)}" y="${height-20}" text-anchor="middle">${t}</text>`;
+    // Weight is only measured weekly, so its points are joined across the days in between.
+    const joinGaps=selection.key==='weight';
     let line='',previous=null;
     for(const r of rows){
-      if(r.value===null){previous=null;continue;}
-      line+=`${previous!==null&&r.hour===previous+1?'L':'M'}${x(r.hour)},${y(r.value)} `;
-      previous=r.hour;
+      if(r.value===null){if(!joinGaps)previous=null;continue;}
+      line+=`${previous!==null?'L':'M'}${x(r.t)},${y(r.value)} `;
+      previous=r.t;
     }
-    const dots=measured.map(r=>`<circle tabindex="0" aria-label="Hour ${r.hour}: ${r.value} ${field[1]}" cx="${x(r.hour)}" cy="${y(r.value)}" r="4" fill="#2d6e53" stroke="white" stroke-width="2"><title>Hour ${r.hour}: ${r.value} ${field[1]}</title></circle>`).join('');
-    const details=rows.map(r=>`<tr><td>Hour ${r.hour}</td><td>${r.value===null?'Not measured':r.value+' '+field[1]}</td></tr>`).join('');
+    const dots=measured.map(r=>`<circle tabindex="0" aria-label="${step} ${r.t}: ${r.value} ${unit}" cx="${x(r.t)}" cy="${y(r.value)}" r="4" fill="#626262" stroke="white" stroke-width="2"><title>${step} ${r.t}: ${r.value} ${unit}</title></circle>`).join('');
+    const table=rows.map(r=>`<tr><td>${step} ${r.t}</td><td>${r.value===null?'Not measured':r.value+' '+unit}</td></tr>`).join('');
     $('#modal-body').innerHTML=`
       <div class="history-summary">
-        <span>${measured.length} hourly readings · trend trajectory</span>
-        <strong>${measured.at(-1).value} <small>${field[1]}</small></strong>
+        <span>${measured.length} ${daily?'daily':'hourly'} readings</span>
+        <strong>${measured.at(-1).value} <small>${unit}</small></strong>
       </div>
-      <svg class="history-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${field[0]} by observation hour">${grid}<path d="${line}" fill="none" stroke="#2d6e53" stroke-width="2.5"/>${dots}</svg>
-      <div class="history-axis">Care Observation Hour</div>
-      <p class="history-note">${field[1]} · Continuous surveillance stream. Gaps indicate unmeasured labs.</p>
-      <details><summary>View hourly values table</summary><div class="history-table"><table><thead><tr><th>Hour</th><th>${field[0]}</th></tr></thead><tbody>${details}</tbody></table></div></details>
-    `;
+      <svg class="history-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(selection.label)} by ${step.toLowerCase()}">${grid}<path d="${line}" fill="none" stroke="#626262" stroke-width="2.5"/>${dots}</svg>
+      <div class="history-axis">${daily?'Care log day':'Observation hour'}</div>
+      <p class="history-note">${daily?'From the daily care logs. Weight is recorded weekly.':'Bedside vitals. Gaps are hours with no reading.'}</p>
+      <details><summary>View values table</summary><div class="history-table"><table><thead><tr><th>${step}</th><th>${esc(selection.label)}</th></tr></thead><tbody>${table}</tbody></table></div></details>`;
   }catch(e){
-    if(request===historyRequest&&historySelection===selection)$('#modal-body').innerHTML='<p>Unable to load hourly history.</p>';
+    if(request===historyRequest&&historySelection===selection)$('#modal-body').innerHTML='<p>Unable to load history.</p>';
   }
 }
+setInterval(()=>{if(historySelection&&$('#modal').open)loadHistory()},3000);
 
-setInterval(()=>{if(historySelection&&$('#modal').open)loadVitalHistory()},3000);
 
 $('#delete-patient').onclick=()=>{
   if(!selected)return;
@@ -748,8 +667,8 @@ $('#delete-patient').onclick=()=>{
   historySelection=null;
   historyRequest++;
   modal('Delete resident data?',`
-    <p id="delete-description">Delete all stored records for ${patient.name}?</p>
-    <p>This removes observations, predictions, alerts, and acknowledgments. Local files are kept.</p>
+    <p id="delete-description">Delete all stored records for ${esc(patient.name)}?</p>
+    <p>This removes care logs, scores, vitals, alerts and acknowledgments. Local files are kept.</p>
     <div class="delete-actions">
       <button class="button" id="cancel-delete">Cancel</button>
       <button class="button danger" id="confirm-delete">Delete permanently</button>
@@ -777,7 +696,7 @@ $('#delete-all-patients').onclick=()=>{
   historySelection=null;
   historyRequest++;
   modal('Delete all resident records?',`
-    <p>This permanently deletes <strong>every resident</strong> and all saved observations. You can restore them anytime using <strong>Reset demo cohort</strong>.</p>
+    <p>This permanently deletes <strong>every resident</strong> and all saved observations. Run the replays again to reload them.</p>
     <label for="delete-all-text">Type <strong>DELETE ALL</strong> to confirm</label>
     <input id="delete-all-text" class="delete-confirm-input" autocomplete="off" placeholder="DELETE ALL">
     <div class="delete-actions">
@@ -797,7 +716,7 @@ $('#delete-all-patients').onclick=()=>{
       const result=await api('/api/delete-all-patients',{confirm:'DELETE ALL'});
       $('#modal').close();
       await refresh();
-      notify(`${result.count} residents and records deleted. Click Reset Demo Cohort to restore.`);
+      notify(`${result.count} residents and records deleted. Run the replays again to reload them.`);
     }catch(e){
       const error=$('#delete-all-error');
       if(error){

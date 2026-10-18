@@ -2,11 +2,21 @@
 
 Reviewed: October 17, 2026. This document describes the source currently in this checkout, not a claim about clinical validation or live database contents. Intended for a developer or coding agent continuing the project. No credentials are included.
 
-## What the project is
+## Current focus: NutriSense (malnutrition early warning)
+
+The project pivoted from sepsis to malnutrition for the PointClickCare "Catch It Early" challenge. The dashboard is branded **NutriSense** for Maplewood Senior Living.
+
+- **Data:** synthesized daily care logs (`data/nutrition/<id>.csv`: meals %, fluids, weekly weights, appetite, chewing difficulty, CNA notes) created by `npm.cmd run generate` for PSV residents aged 65+. Patterns rotate stable / gradual decline / stable / sudden drop. PhysioNet vitals remain as supporting context only.
+- **Score:** `nutrition.mjs` `scoreNutrition()`, a transparent rule-based score (model `nutrition_rules_v1`) inspired by MUST, MNA-SF and the MDS 75% intake trigger: low intake, drop vs the resident's own 2-week baseline, weight loss since first weigh-in, low BMI, low fluids, missed meals, chewing difficulty. Points x 10 = risk 0-100; watch at 30, alert at 70. Every point is returned as a driver with its evidence.
+- **Replay:** `npm.cmd run replay-nutrition` writes one day per tick into `septisense.nutrition_logs` and a scored prediction (reasons in `predictions.details`), opening an alert at 70+. `npm.cmd run replay` now defaults to residents aged 65+ (`--min-age`).
+- **API:** `/api/patients` takes risk/reasons/alerts from the newest NutriSense score and vitals from the newest PSV snapshot; `/api/nutrition-history` returns daily logs with each day's score. The Blink is `/api/actions/nutrition-review`.
+- **Honesty note:** the care logs are synthetic; qSOFA/SIRS and the sepsis label are no longer shown.
+
+## What the project is (original sepsis prototype)
 
 SeptiSense is a local, database-backed healthcare hackathon prototype. The current UI is branded for a senior-living/post-acute facility and calls patients “residents.” Its working data pipeline replays PhysioNet-style PSV files into Tiger Data/TimescaleDB and displays the latest observations plus hourly vital charts.
 
-The original product concept included clinical rules, a trained risk model, an LLM explanation layer, and Solana alerts. Only screening rules, database persistence, demo risk presets, and presentation-level explanations are implemented. There is no trained model, LLM integration, wallet signing, blockchain submission, or working Solana Action endpoint.
+The original product concept included clinical rules, a trained risk model, an LLM explanation layer, and Solana alerts. Only screening rules, database persistence, demo risk presets, and presentation-level explanations are implemented. There is no trained model or LLM integration. The Solana Blink is real on devnet: `/api/actions/sepsis-review` follows the Solana Actions spec (GET metadata, POST unsigned memo transaction, POST confirm), and the server verifies the signed memo on-chain before storing a row in `blink_receipts` and acknowledging any open alert. See `solana.mjs` (dependency-free transaction builder and JSON-RPC verification).
 
 ## Stack and source map
 
@@ -76,7 +86,7 @@ Each hourly transaction writes the raw source row, typed observation, and unscor
 
 ## PSV mapping and missing values
 
-Filenames identify patients: `p000001.psv` becomes database ID `p000001` and display name `Patient 1`. The trailing filename number drives the display number; it is not a separate sequential allocation. Numeric IDs can collide across different source folders because folder/dataset identity is not namespaced.
+Filenames identify patients: `p000001.psv` becomes database ID `p000001` and display name `Resident 1` (older `Patient N` names are renamed on server start). The trailing filename number drives the display number; it is not a separate sequential allocation. Numeric IDs can collide across different source folders because folder/dataset identity is not namespaced.
 
 The vital array order is shared by the frontend and persistence code and must remain consistent:
 

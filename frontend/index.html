@@ -3,23 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SeptiSense · Early Sepsis Detection</title>
+  <title>NutriSense · Early Malnutrition Detection</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Sidebar -->
   <aside class="sidebar">
     <a class="brand" href="./">
-      <span class="brand-icon"><i data-icon="pulse"></i></span>
-      <span>SeptiSense<small class="brand-sub">Early Sepsis Detection</small></span>
+      <img class="brand-logo" src="logo.png" alt="NutriSense logo">
+      <span>NutriSense<small class="brand-sub">Early Malnutrition Detection</small></span>
     </a>
 
-    <div class="workspace">
-      <span class="hospital"><i data-icon="hospital"></i></span>
-      <div>
-        Sepsis Hospital
-      </div>
-    </div>
 
     <div class="nav-label">WORKSPACE</div>
     <nav>
@@ -29,23 +23,12 @@
       <button class="nav" data-view="alerts">
         <span><i data-icon="bell"></i></span> Early alerts <i id="alert-count">1</i>
       </button>
-      <button class="nav" data-view="audit">
-        <span><i data-icon="file"></i></span> On-chain audit
-      </button>
     </nav>
 
     <div class="sidebar-bottom">
       <div class="system">
-        <span class="dot"></span> Patient database connected
+        <span class="dot"></span> Resident database connected
         <small>Real-time surveillance active</small>
-      </div>
-      <div class="profile">
-        <div class="avatar" id="user-avatar">SC</div>
-        <div>
-          <span id="user-name">Dr. Sarah Chen</span>
-          <small id="user-role-label">Attending Physician · Geriatrics</small>
-        </div>
-        <span><i data-icon="chevron"></i></span>
       </div>
     </div>
   </aside>
@@ -53,14 +36,19 @@
   <!-- Main Content -->
   <main>
     <header>
-      <div>
-        <span class="breadcrumb">Senior Living <span>/</span></span>
-        <span id="header-breadcrumb">Resident Early Warning Surveillance</span>
+      <div class="workspace">
+        <span class="hospital"><i data-icon="home"></i></span>
+        <span>Maplewood Senior Living</span>
       </div>
       <div class="header-right">
-        <span class="demo-pill"><i data-icon="target"></i> &nbsp; EARLY DETECTION WORKSPACE</span>
         <span class="header-date">Oct 17, 2026</span>
-        <div class="avatar small">SC</div>
+        <div class="profile">
+          <div class="avatar" id="user-avatar">SC</div>
+          <div>
+            <span id="user-name">Dr. Sarah Chen</span>
+            <small id="user-role-label">Attending Physician · Geriatrics</small>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -68,9 +56,9 @@
       <!-- Page Heading -->
       <div class="page-heading">
         <div class="header-status-chips">
-          <span class="chip red" id="chip-urgent"><i data-icon="alert"></i> <b id="chip-urgent-count">1</b> Urgent assessment</span>
-          <span class="chip yellow" id="chip-watch"><i data-icon="eye"></i> <b id="chip-watch-count">2</b> Elevated watch</span>
-          <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">17</b> Stable baseline</span>
+          <span class="chip red" id="chip-urgent"><i data-icon="alert"></i> <b id="chip-urgent-count">0</b> High risk</span>
+          <span class="chip yellow" id="chip-watch"><i data-icon="eye"></i> <b id="chip-watch-count">0</b> Watch</span>
+          <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">0</b> On track</span>
         </div>
         <div class="page-actions">
           <button class="button danger" id="delete-all-patients">Delete all residents</button>
@@ -82,23 +70,19 @@
       <div class="stats">
         <div class="stat">
           <span>Residents monitored <span><i data-icon="users"></i></span></span>
-          <div><span id="monitored-count">08</span> <small>Across 3 wings</small></div>
-          <footer><span class="dot"></span> Assisted Living & Memory Care</footer>
+          <div><span id="monitored-count">08</span> <small>Total</small></div>
         </div>
         <div class="stat">
-          <span>Early warning flags <span><i data-icon="triangle"></i></span></span>
-          <div id="high-stat">01 <small>Needs early check</small></div>
-          <footer class="red-text">↑ <span id="high-caption">1 active early alert</span></footer>
+          <span>Open alerts <span><i data-icon="triangle"></i></span></span>
+          <div id="high-stat">0 <small>Need review today</small></div>
         </div>
         <div class="stat">
-          <span>ER transfers prevented <span><i data-icon="shield"></i></span></span>
-          <div><span id="average">85</span><em>%</em> <small>Early diversion rate</small></div>
-          <footer>Catching signs before 911 dispatch</footer>
+          <span>Average meal intake <span><i data-icon="utensils"></i></span></span>
+          <div><span id="avg-intake">—</span><em>%</em> <small>7-day, all residents</small></div>
         </div>
         <div class="stat">
-          <span>Early warning lead time <span><i data-icon="clock"></i></span></span>
-          <div>18<em>h</em> <small>Average lead window</small></div>
-          <footer>Small signs caught days ahead</footer>
+          <span>Losing weight <span><i data-icon="scale"></i></span></span>
+          <div><span id="losing-count">0</span> <small>Residents down 2% or more</small></div>
         </div>
       </div>
 
@@ -121,13 +105,13 @@
           </div>
           <div id="patient-list"></div>
           <div class="roster-footer">
-            <span class="dot"></span> EHR Sentinel Sync <span>Continuous</span>
+            <span class="dot"></span> Care logs synced <span>Daily</span>
           </div>
         </section>
 
         <!-- Right Column: Detail View -->
         <div class="patient-detail">
-          <!-- Resident Identity Panel -->
+          <!-- Patient Identity Panel -->
           <section class="panel patient-panel">
             <div class="patient-head">
               <div class="patient-identity">
@@ -138,7 +122,6 @@
                 </div>
               </div>
               <div class="patient-badges">
-                <span class="badge" id="sepsis-status" hidden></span>
                 <span class="badge high" id="patient-badge">● High risk</span>
               </div>
             </div>
@@ -147,105 +130,83 @@
               <button class="button sbar-btn" id="sbar-btn" title="Generate SBAR Clinical Handoff">
                 <i data-icon="clipboard"></i> &nbsp; Generate SBAR handoff
               </button>
-              <button class="button secondary" id="blink-btn" title="Open Solana Blink Emergency Action">
+              <button class="button secondary" id="blink-btn" title="Sign this nutrition review on Solana">
                 <i data-icon="zap"></i> &nbsp; Solana Blink action
               </button>
               <button class="button danger" id="delete-patient">Delete resident data</button>
             </div>
 
-            <div class="patient-context">
-              <span>Admitted <b>Oct 16, 2026</b></span>
-              <span>Attending <b>Dr. Sarah Chen</b></span>
-              <span>Primary CNA <b>Maria Rodriguez</b></span>
-              <span>Care Level <b>Post-Acute Rehab</b></span>
-            </div>
+            <div class="patient-context" id="nutrition-context"></div>
 
-            <!-- Patient information from the PSV file -->
+            <!-- Resident information: demographics and nutrition profile -->
             <div class="section-label">
-              <span>PATIENT INFORMATION</span>
+              <span>RESIDENT INFORMATION</span>
             </div>
-            <div class="psv-grid psv-context" id="psv-context"></div>
+            <div class="psv-context info-groups" id="psv-context"></div>
 
-            <!-- Physiological Vitals Grid -->
+            <!-- Daily nutrition from the care logs -->
             <div class="section-label">
-              <span>PHYSIOLOGICAL OBSERVATIONS</span>
+              <span>DAILY NUTRITION</span>
+            </div>
+            <div class="vitals nutrition-cards" id="nutrition-cards"></div>
+
+            <!-- Supporting bedside vitals -->
+            <div class="section-label">
+              <span>SUPPORTING VITALS</span>
             </div>
             <div class="vitals" id="vitals"></div>
-
-            <!-- Every column from the PhysioNet PSV dataset -->
-            <div class="section-label">
-              <span>ALL MEASURED INFORMATION</span>
-            </div>
-            <div class="psv-panel" id="psv-observations">
-              <div class="psv-empty">Loading dataset observations…</div>
-            </div>
           </section>
 
           <!-- Analytics Grid: Risk Trend & Clinical Scores -->
           <div class="analysis-grid">
             <section class="panel risk-panel">
               <div class="panel-title">
-                <h2>Early Sepsis Risk Trajectory</h2>
-                <span class="mini-tag">Last 6 hours</span>
+                <h2>Malnutrition Risk Trajectory</h2>
+                <span class="mini-tag" id="trajectory-tag">Daily score</span>
               </div>
               <div class="risk-number">
-                <strong id="risk-number">89</strong>
-                <span>%<small id="risk-change">Elevated risk · prompt assessment</small></span>
+                <strong id="risk-number">—</strong>
+                <span>/100<small id="risk-change"></small></span>
                 <span class="badge high" id="chart-badge">High risk</span>
               </div>
               <div class="chart">
-                <svg viewBox="0 0 600 170" role="img" aria-label="Illustrative six-hour sepsis risk trend">
+                <svg viewBox="0 0 600 170" role="img" aria-label="Daily malnutrition risk score">
                   <defs>
                     <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stop-color="#df785c" stop-opacity=".25"/>
-                      <stop offset="1" stop-color="#df785c" stop-opacity="0"/>
+                      <stop offset="0" stop-color="#1f1f1f" stop-opacity=".12"/>
+                      <stop offset="1" stop-color="#1f1f1f" stop-opacity="0"/>
                     </linearGradient>
                   </defs>
-                  <path d="M35 20H575M35 65H575M35 110H575M35 155H575" stroke="#e9edeb" fill="none"/>
-                  <path d="M35 56H575" stroke="#dcab95" stroke-dasharray="5 5"/>
-                  <text x="470" y="48" fill="#ae8170" font-size="10">Alert threshold 70%</text>
+                  <path d="M35 20H575M35 65H575M35 110H575M35 155H575" stroke="#e9e9e9" fill="none"/>
+                  <path d="M35 56H575" stroke="#a8a8a8" stroke-dasharray="5 5"/>
+                  <text x="475" y="48" fill="#7a7a7a" font-size="10">Alert threshold 70</text>
                   <text x="0" y="24">100</text>
                   <text x="9" y="69">70</text>
                   <text x="9" y="114">40</text>
                   <text x="15" y="159">0</text>
                   <path id="chart-area" fill="url(#fill)"/>
-                  <path id="chart-line" fill="none" stroke="#d8785b" stroke-width="3" stroke-linecap="round"/>
-                  <circle id="chart-point" r="5" fill="#d8785b" stroke="white" stroke-width="3"/>
+                  <path id="chart-line" fill="none" stroke="#1f1f1f" stroke-width="3" stroke-linecap="round"/>
+                  <circle id="chart-point" r="5" fill="#1f1f1f" stroke="white" stroke-width="3"/>
                 </svg>
                 <div class="chart-times">
-                  <span>-5h</span><span>-4h</span><span>-3h</span><span>-2h</span><span>-1h</span><span>Now</span>
+                  
                 </div>
               </div>
               <div class="chart-legend">
-                <span><i></i> Early warning trajectory</span>
-                <span>Tiger Data real-time stream</span>
+                <span><i></i> Daily NutriSense score · click for details</span>
+                <span>Rule-based · every point explained</span>
               </div>
             </section>
 
             <section class="panel scores-panel">
               <div class="panel-title">
-                <h2>Clinical Screening Scores</h2>
-                <span class="info" title="Screening scores assist care teams in early recognition">ⓘ</span>
+                <h2>Nutrition Screening</h2>
+                <span class="info" title="Thresholds follow MUST and MNA-SF screening and the MDS 75% meal-intake trigger">ⓘ</span>
               </div>
-              <div class="score-row">
-                <div>
-                  <strong>qSOFA</strong>
-                  <small>Quick Organ Dysfunction (Bedside)</small>
-                </div>
-                <div><b id="qsofa">3</b><span> / 3</span></div>
-              </div>
-              <div class="score-bars" id="q-bars"></div>
-              <div class="score-row">
-                <div>
-                  <strong>SIRS</strong>
-                  <small>Systemic Inflammatory Response</small>
-                </div>
-                <div><b id="sirs">4</b><span> / 4</span></div>
-              </div>
-              <div class="score-bars" id="s-bars"></div>
+              <div class="screening" id="screening"></div>
               <div class="score-note">
-                Senior-Adjusted Screening
-                <small>Alerts on atypical geriatric presentations</small>
+                Each resident is compared with their own normal
+                <small>Based on MUST / MNA-SF screening criteria</small>
               </div>
             </section>
           </div>
@@ -254,7 +215,7 @@
           <section class="panel insights">
             <div class="panel-title">
               <h2><span class="spark"><i data-icon="sparkle"></i></span> Behind the Alert · Why Was This Resident Flagged?</h2>
-              <span class="mini-tag highlight">EXPLAINABLE AI REASONING</span>
+              <span class="mini-tag highlight">EXPLAINABLE SCORE</span>
             </div>
             
             <div class="explain-container">
@@ -262,33 +223,27 @@
               
               <div class="explain-columns">
                 <div class="explain-col">
-                  <strong><i data-icon="search"></i> Early Signals Caught</strong>
+                  <strong><i data-icon="search"></i> Warning Signs Found</strong>
                   <div class="drivers" id="drivers"></div>
                 </div>
                 <div class="explain-col">
-                  <strong><i data-icon="bulb"></i> Geriatric Clinical Context</strong>
-                  <p id="clinical-context" class="context-p">
-                    In seniors, early infection rarely presents with a fever spike. Look for subtle tachypnea, mild confusion, and missed meals as the earliest clues of systemic inflammation.
-                  </p>
+                  <strong><i data-icon="bulb"></i> Senior Nutrition Context</strong>
+                  <p id="clinical-context" class="context-p"></p>
                 </div>
               </div>
 
               <div class="care-plan-box">
                 <div class="plan-header">
-                  <strong><i data-icon="clipboard"></i> Empathetic Care Team Action Plan (Prevent ER Transfer)</strong>
-                  <span class="plan-badge">Early Protocol</span>
+                  <strong><i data-icon="clipboard"></i> Suggested Care Team Actions</strong>
+                  <span class="plan-badge">Based on the warning signs</span>
                 </div>
-                <ul class="plan-steps" id="plan-steps">
-                  <li><strong>Hydration Check:</strong> Offer 250–500 mL oral fluids or initiate bedside hydration protocol.</li>
-                  <li><strong>Urgent Assessment:</strong> Perform point-of-care dipstick urinalysis and recheck vitals in 60 minutes.</li>
-                  <li><strong>Physician Review:</strong> SBAR summary generated for Dr. Sarah Chen. Emergency Solana Blink order available.</li>
-                </ul>
+                <ul class="plan-steps" id="plan-steps"></ul>
               </div>
             </div>
 
             <div class="insight-footer">
-              <span><i data-icon="layers"></i> &nbsp; Multimodal: Behavioral logs + qSOFA + Vital trends</span>
-              <button id="review">Review Solana Blink & Action <span>↗</span></button>
+              <span><i data-icon="layers"></i> &nbsp; Meal logs + fluids + weekly weights + CNA notes</span>
+              <button id="review">Sign nutrition review on Solana <span>↗</span></button>
             </div>
           </section>
         </div>
@@ -296,8 +251,8 @@
 
       <!-- Page Footer -->
       <footer class="page-footer">
-        <span><i data-icon="pulse"></i> SeptiSense <span>·</span> Early Sepsis Detection <span>·</span> Designed with empathy for care teams</span>
-        <span>Prototype demonstration · Timescale & Tiger Data powered · Devnet Solana Action ready</span>
+        <span><i data-icon="pulse"></i> NutriSense <span>·</span> Early Malnutrition Detection <span>·</span> Designed with empathy for care teams</span>
+        <span>Prototype · synthesized care logs + PhysioNet vitals · Timescale on Tiger Data · Solana devnet</span>
       </footer>
     </div>
   </main>

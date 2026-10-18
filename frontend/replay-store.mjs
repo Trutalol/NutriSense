@@ -29,7 +29,7 @@ export async function writeHour(run, patient, row){
   // Serialize retries of a single replay hour, including multiple replay processes.
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`${run.id}:${patient.id}:${row.ICULOS}`]);
   const timestamp=new Date(new Date(run.started_at).getTime()+(row.ICULOS-1)*3600000).toISOString();
-  await c.query('INSERT INTO septisense.patients(id,name,age,sex,bed) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[patient.id,`Patient ${patient.id.match(/\d+$/) ? Number(patient.id.match(/\d+$/)[0]) : patient.id}`,Math.round(row.Age||0),row.Gender===1?'Male':row.Gender===0?'Female':'Unknown','Dataset']);
+  await c.query('INSERT INTO septisense.patients(id,name,age,sex,bed) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[patient.id,`Resident ${patient.id.match(/\d+$/) ? Number(patient.id.match(/\d+$/)[0]) : patient.id}`,Math.round(row.Age||0),row.Gender===1?'Male':row.Gender===0?'Female':'Unknown','Dataset']);
   const inserted=await c.query('INSERT INTO septisense.replay_rows(run_id,patient_id,source_hour,observed_at,raw_data) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING source_hour',[run.id,patient.id,row.ICULOS,timestamp,JSON.stringify(row)]);
   if(!inserted.rowCount){await c.query('COMMIT');return false}
   const encounter=`ICU-${patient.id}-01`;

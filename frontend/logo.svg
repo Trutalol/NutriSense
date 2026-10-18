@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="15" y1="10" x2="105" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2a7558"/>
+      <stop offset="100%" stop-color="#144332"/>
+    </linearGradient>
+    <linearGradient id="pulseGrad" x1="20" y1="60" x2="100" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="70%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Shield / Cell Contour -->
+  <rect x="10" y="10" width="100" height="100" rx="28" fill="url(#shieldGrad)"/>
+  <rect x="10" y="10" width="100" height="100" rx="28" stroke="#4ade80" stroke-width="2.5" stroke-opacity="0.25"/>
+
+  <!-- Subtle Concentric Sensing Radar Rings -->
+  <circle cx="60" cy="60" r="38" stroke="#ffffff" stroke-width="1" stroke-opacity="0.08" stroke-dasharray="4 4"/>
+  <circle cx="60" cy="60" r="26" stroke="#ffffff" stroke-width="1" stroke-opacity="0.12"/>
+
+  <!-- Early Detection Wave (Vital Sensor Pulse) -->
+  <path d="M28 62 H44 L50 48 L56 74 L63 36 L70 82 L76 56 L82 62 H92" 
+        stroke="url(#pulseGrad)" 
+        stroke-width="4.5" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+
+  <!-- Early Warning Sentinel Dot (Top Right) -->
+  <circle cx="88" cy="32" r="5" fill="#f59e0b"/>
+  <circle cx="88" cy="32" r="9" stroke="#f59e0b" stroke-width="1.5" stroke-opacity="0.5"/>
+</svg>
