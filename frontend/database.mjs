@@ -52,15 +52,26 @@ async function save(c,id,v,risk,run){
  return {prediction_id:prediction,vitals_hash:hash};
 }
 export async function record(id,v,risk,run){const c=await pool.connect();try{await c.query('BEGIN');const p=await c.query('SELECT id FROM septisense.patients WHERE id=$1 FOR UPDATE',[id]);if(!p.rowCount)throw Object.assign(new Error('Unknown patient'),{status:404});const result=await save(c,id,v,risk,run);await c.query('COMMIT');return result}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
-// Latest state per resident. Risk, reasons and alerts come from the newest NutriSense score; vitals come from the
-// newest vitals snapshot (PSV replay or demo). Residents without a nutrition score show as "Not scored".
-export async function patients(){return (await pool.query(`SELECT p.*, n.risk, n.details, vit.snapshot AS v,
- COALESCE(n.hash,vit.hash) AS hash, COALESCE(n.id,vit.id) AS prediction_id, a.id AS alert_id, a.status AS alert_status
+// Latest NutriSense score for each resident (and the one before it, so the dashboard can flag rising risk).
+const LATEST=`LEFT JOIN LATERAL (SELECT id,risk,hash,details,run_id FROM septisense.predictions WHERE encounter_id=e.id AND model_version='${MODEL_VERSION}' ORDER BY predicted_at DESC LIMIT 1) n ON true
+ LEFT JOIN septisense.alerts a ON a.encounter_id=e.id AND a.run_id=n.run_id`;
+
+// Compact rows for the resident list: enough to sort, group and filter hundreds of residents without the full detail.
+export async function patients(){return (await pool.query(`SELECT p.id, p.name, p.age, p.sex, p.bed, n.risk, n.id AS prediction_id, n.hash,
+ n.details->'drivers'->0->>'label' AS top_reason, jsonb_array_length(COALESCE(n.details->'drivers','[]'::jsonb)) AS reason_count,
+ (n.details->'summary'->>'intake7')::float AS intake7, (n.details->'summary'->>'weightChangePct')::float AS weight_change,
+ prev.risk AS risk_prev, a.id AS alert_id, a.status AS alert_status
  FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id
- LEFT JOIN LATERAL (SELECT * FROM septisense.predictions WHERE encounter_id=e.id AND model_version<>'${MODEL_VERSION}' ORDER BY predicted_at DESC LIMIT 1) vit ON true
- LEFT JOIN LATERAL (SELECT * FROM septisense.predictions WHERE encounter_id=e.id AND model_version='${MODEL_VERSION}' ORDER BY predicted_at DESC LIMIT 1) n ON true
- LEFT JOIN septisense.alerts a ON a.encounter_id=e.id AND a.run_id=n.run_id
- WHERE n.id IS NOT NULL OR vit.id IS NOT NULL ORDER BY p.id`)).rows}
+ ${LATEST}
+ LEFT JOIN LATERAL (SELECT risk FROM septisense.predictions WHERE encounter_id=e.id AND model_version='${MODEL_VERSION}' AND run_id=n.run_id ORDER BY predicted_at DESC OFFSET 1 LIMIT 1) prev ON true
+ ORDER BY n.risk DESC NULLS LAST, p.id`)).rows}
+
+// Everything the detail panel needs for one resident: screening profile, latest score with reasons, alert.
+export async function resident(id){
+ const {rows:[row]}=await pool.query(`SELECT p.id, p.name, p.age, p.sex, p.bed, p.screening, n.risk, n.details, n.hash, n.id AS prediction_id, a.id AS alert_id, a.status AS alert_status
+  FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id ${LATEST} WHERE p.id=$1 LIMIT 1`,[id]);
+ return row||null;
+}
 export async function audit(){return (await pool.query(`SELECT ev.created_at AS time, e.patient_id || ' alert ' || ev.event_type AS text, p.hash FROM septisense.alert_events ev JOIN septisense.alerts a ON a.id=ev.alert_id JOIN septisense.encounters e ON e.id=a.encounter_id JOIN septisense.predictions p ON p.id=a.prediction_id ORDER BY ev.created_at DESC LIMIT 100`)).rows}
 export async function acknowledge(id){const c=await pool.connect();try{await c.query('BEGIN');const r=await c.query("UPDATE septisense.alerts SET status='acknowledged' WHERE id=$1 AND status='open' RETURNING id",[id]);if(r.rowCount)await c.query("INSERT INTO septisense.alert_events(id,alert_id,event_type) VALUES($1,$2,'acknowledged')",[randomUUID(),id]);await c.query('COMMIT');return {acknowledged:!!r.rowCount}}catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}}
 
@@ -127,32 +138,55 @@ export async function recordBlinkReceipt(prediction,{signature,account,memo,clus
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 
-// One replayed day for one resident: the care log, its score (with reasons) and an alert when the score is high.
-export async function writeNutritionDay(run,resident,log,score){
+// Registers every resident of a nutrition run (profile, screening, encounter) in one transaction.
+export async function upsertResidents(run,residents){
+ const rows=residents.map(r=>{const n=r.id.match(/\d+$/);const prof=r.profile;
+  return {id:r.id,name:`Resident ${n?Number(n[0]):r.id}`,age:Math.round(prof.age||0),sex:prof.sex||'Unknown',bed:prof.wing&&prof.room?`${prof.wing} ${prof.room}`:'Residence',screening:prof.screening||null}});
  const c=await pool.connect();
  try{
   await c.query('BEGIN');
-  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`${run.id}:${resident.id}:${log.day}`]);
-  const logDate=new Date(new Date(run.started_at).getTime()+(log.day-1)*86400000).toISOString().slice(0,10);
-  const number=resident.id.match(/\d+$/);
-  await c.query('INSERT INTO septisense.patients(id,name,age,sex,bed,screening) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO UPDATE SET screening=COALESCE(EXCLUDED.screening,septisense.patients.screening)',
-   [resident.id,`Resident ${number?Number(number[0]):resident.id}`,Math.round(resident.profile.age||0),resident.profile.sex||'Unknown','Residence',resident.profile.screening?JSON.stringify(resident.profile.screening):null]);
-  const encounter=`ICU-${resident.id}-01`;
-  await c.query('INSERT INTO septisense.encounters(id,patient_id,admitted_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[encounter,resident.id,run.started_at]);
-  const inserted=await c.query(`INSERT INTO septisense.nutrition_logs(run_id,patient_id,day,log_date,breakfast_pct,lunch_pct,dinner_pct,fluids_ml,weight_kg,appetite,chewing_difficulty,note)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT DO NOTHING RETURNING day`,
-   [run.id,resident.id,log.day,logDate,log.breakfast_pct,log.lunch_pct,log.dinner_pct,log.fluids_ml,log.weight_kg,log.appetite,log.chewing_difficulty,log.note]);
-  if(!inserted.rowCount){await c.query('COMMIT');return false}
-  const details={day:log.day,log_date:logDate,points:score.points,tier:score.tier,drivers:score.drivers,summary:score.summary,profile:resident.profile};
-  const canonical=JSON.stringify({resident_id:resident.id,run_id:run.id,day:log.day,log,risk:score.risk,drivers:score.drivers,model_version:MODEL_VERSION});
-  const hash=createHash('sha256').update(canonical).digest('hex'),prediction=randomUUID();
-  await c.query(`INSERT INTO septisense.predictions(id,encounter_id,predicted_at,run_id,risk,qsofa,sirs,snapshot,canonical,hash,model_version,details) VALUES($1,$2,now(),$3,$4,NULL,NULL,$5,$6,$7,$8,$9)`,
-   [prediction,encounter,run.id,score.risk,JSON.stringify(log),canonical,hash,MODEL_VERSION,JSON.stringify(details)]);
-  if(score.risk>=70){
-   const a=await c.query('INSERT INTO septisense.alerts(id,prediction_id,encounter_id,run_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',[randomUUID(),prediction,encounter,run.id]);
-   if(a.rowCount)await c.query("INSERT INTO septisense.alert_events(id,alert_id,event_type) VALUES($1,$2,'created')",[randomUUID(),a.rows[0].id]);
+  await c.query(`INSERT INTO septisense.patients(id,name,age,sex,bed,screening)
+   SELECT id,name,age,sex,bed,screening FROM jsonb_to_recordset($1::jsonb) AS x(id text,name text,age int,sex text,bed text,screening jsonb)
+   ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,age=EXCLUDED.age,sex=EXCLUDED.sex,bed=EXCLUDED.bed,screening=COALESCE(EXCLUDED.screening,septisense.patients.screening)`,[JSON.stringify(rows)]);
+  await c.query(`INSERT INTO septisense.encounters(id,patient_id,admitted_at) SELECT 'ICU-'||id||'-01',id,$2 FROM jsonb_to_recordset($1::jsonb) AS x(id text) ON CONFLICT DO NOTHING`,[JSON.stringify(rows),run.started_at]);
+  await c.query('COMMIT');
+ }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
+}
+
+// One replayed day for every resident at once: care logs, scores (with reasons) and alerts for scores of 70+.
+// A handful of queries per day regardless of how many residents there are. Re-running a day writes nothing new.
+export async function writeNutritionDayBatch(run,day,entries){
+ if(!entries.length)return 0;
+ const logDate=new Date(new Date(run.started_at).getTime()+(day-1)*86400000).toISOString().slice(0,10);
+ const logs=entries.map(({resident,log})=>({patient_id:resident.id,...log,log_date:logDate}));
+ const c=await pool.connect();
+ try{
+  await c.query('BEGIN');
+  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`${run.id}:day:${day}`]);
+  const inserted=new Set((await c.query(`INSERT INTO septisense.nutrition_logs(run_id,patient_id,day,log_date,breakfast_pct,lunch_pct,dinner_pct,fluids_ml,weight_kg,appetite,chewing_difficulty,note)
+   SELECT $2,patient_id,day,log_date,breakfast_pct,lunch_pct,dinner_pct,fluids_ml,weight_kg,appetite,chewing_difficulty,note
+   FROM jsonb_to_recordset($1::jsonb) AS x(patient_id text,day int,log_date date,breakfast_pct smallint,lunch_pct smallint,dinner_pct smallint,fluids_ml int,weight_kg numeric,appetite text,chewing_difficulty boolean,note text)
+   ON CONFLICT DO NOTHING RETURNING patient_id`,[JSON.stringify(logs),run.id])).rows.map(r=>r.patient_id));
+  const predictions=entries.filter(e=>inserted.has(e.resident.id)).map(({resident,log,score})=>{
+   const {screening,...profile}=resident.profile; // the screening profile lives on the resident, not on every daily score
+   const details={day,log_date:logDate,points:score.points,tier:score.tier,drivers:score.drivers,summary:score.summary,profile};
+   const canonical=JSON.stringify({resident_id:resident.id,run_id:run.id,day,log,risk:score.risk,drivers:score.drivers,model_version:MODEL_VERSION});
+   return {id:randomUUID(),encounter_id:`ICU-${resident.id}-01`,risk:score.risk,snapshot:log,canonical,hash:createHash('sha256').update(canonical).digest('hex'),details};
+  });
+  if(predictions.length){
+   await c.query(`INSERT INTO septisense.predictions(id,encounter_id,predicted_at,run_id,risk,qsofa,sirs,snapshot,canonical,hash,model_version,details)
+    SELECT id,encounter_id,now(),$2,risk,NULL,NULL,snapshot,canonical,hash,$3,details
+    FROM jsonb_to_recordset($1::jsonb) AS x(id uuid,encounter_id text,risk int,snapshot jsonb,canonical text,hash text,details jsonb)`,[JSON.stringify(predictions),run.id,MODEL_VERSION]);
+   const high=predictions.filter(p=>p.risk>=70).map(p=>({id:randomUUID(),prediction_id:p.id,encounter_id:p.encounter_id}));
+   if(high.length){
+    const created=(await c.query(`INSERT INTO septisense.alerts(id,prediction_id,encounter_id,run_id)
+     SELECT id,prediction_id,encounter_id,$2 FROM jsonb_to_recordset($1::jsonb) AS x(id uuid,prediction_id uuid,encounter_id text)
+     ON CONFLICT DO NOTHING RETURNING id`,[JSON.stringify(high),run.id])).rows;
+    if(created.length)await c.query(`INSERT INTO septisense.alert_events(id,alert_id,event_type) SELECT gen_random_uuid(),id,'created' FROM unnest($1::uuid[]) AS id`,[created.map(r=>r.id)]);
+   }
   }
-  await c.query('COMMIT');return true;
+  await c.query('COMMIT');
+  return inserted.size;
  }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 

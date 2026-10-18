@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {initialize,patients,record,audit,acknowledge,pool,deletePatientData,deleteAllPatientData,seedDemoPatients,predictionForAction,recordBlinkReceipt,nutritionHistory} from './database.mjs';
+import {initialize,patients,record,audit,acknowledge,pool,deletePatientData,deleteAllPatientData,seedDemoPatients,predictionForAction,recordBlinkReceipt,nutritionHistory,resident} from './database.mjs';
 import {ACTION_HEADERS,CLUSTER,parsePublicKey,latestBlockhash,memoMessage,unsignedTransaction,reviewMemo,verifyMemoTransaction,explorerUrl} from './solana.mjs';
 const assets={'/':['index.html','text/html'],'/index.html':['index.html','text/html'],'/app.js':['app.js','text/javascript'],'/style.css':['style.css','text/css'],'/logo.png':['logo.png','image/png']};
 function json(res,status,value){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value))}
@@ -81,6 +81,12 @@ const server=http.createServer(async(req,res)=>{
  if(!latest.rowCount)return json(res,200,{rows:[]});
  const result=await pool.query('SELECT source_hour AS hour, observed_at, raw_data FROM septisense.replay_rows WHERE patient_id=$1 AND run_id=$2 ORDER BY source_hour',[id,latest.rows[0].run_id]);
  return json(res,200,{run_id:latest.rows[0].run_id,rows:result.rows});
+ }
+ if(route==='/api/resident'&&req.method==='GET'){
+ const id=new URL(req.url,'http://localhost').searchParams.get('id');
+ if(!id||!/^[a-zA-Z0-9_-]{1,64}$/.test(id))return json(res,400,{error:'Invalid resident ID'});
+ const row=await resident(id);
+ return row?json(res,200,row):json(res,404,{error:'Resident not found'});
  }
  if(route==='/api/nutrition-history'&&req.method==='GET'){
  const id=new URL(req.url,'http://localhost').searchParams.get('patient');

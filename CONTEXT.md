@@ -6,11 +6,13 @@ Reviewed: October 17, 2026. This document describes the source currently in this
 
 The project pivoted from sepsis to malnutrition for the PointClickCare "Catch It Early" challenge. The dashboard is branded **NutriSense** for Maplewood Senior Living.
 
-- **Data:** synthesized daily care logs (`data/nutrition/<id>.csv`: meals %, fluids, weekly weights, appetite, chewing difficulty, CNA notes) created by `npm.cmd run generate` for PSV residents aged 65+. Patterns rotate stable / gradual decline / stable / sudden drop. PhysioNet vitals remain as supporting context only.
-- **Score:** `nutrition.mjs` `scoreNutrition()`, a transparent rule-based score (model `nutrition_rules_v1`) inspired by MUST, MNA-SF and the MDS 75% intake trigger: low intake, drop vs the resident's own 2-week baseline, weight loss since first weigh-in, low BMI, low fluids, missed meals, chewing difficulty. Points x 10 = risk 0-100; watch at 30, alert at 70. Every point is returned as a driver with its evidence.
-- **Replay:** `npm.cmd run replay-nutrition` writes one day per tick into `septisense.nutrition_logs` and a scored prediction (reasons in `predictions.details`), opening an alert at 70+. `npm.cmd run replay` now defaults to residents aged 65+ (`--min-age`).
-- **API:** `/api/patients` takes risk/reasons/alerts from the newest NutriSense score and vitals from the newest PSV snapshot; `/api/nutrition-history` returns daily logs with each day's score. The Blink is `/api/actions/nutrition-review`.
-- **Honesty note:** the care logs are synthetic; qSOFA/SIRS and the sepsis label are no longer shown.
+- **Residents:** the 518 people aged 65+ in `data/csv/data.csv` (NHANES). `nhanes.mjs` decodes the NHANES codes (sex, race, education, marital, exam/recall status, balance answers); blanks and refused/don't-know codes stay null. Each resident gets a wing (Birch/Cedar/Maple/Willow) and room. PhysioNet PSV data is no longer used.
+- **Care logs:** synthesized daily logs (`data/nutrition/r<SEQN>.csv`, meals %, fluids, weekly weights, appetite, chewing difficulty, CNA notes) created by `npm.cmd run generate`. Day 1 starts from the resident's real NHANES height/weight/calories. About 19% decline over the month; likelihood rises with the file's MALNUTRITION_PROBABILITY_SYNTHETIC.
+- **About the file's malnutrition columns:** MALNUTRITION_RISK_SCORE = -0.35*BMI_z - 0.35*arm_z - 0.15*kcal_z - 0.15*protein_z; the probability is its sigmoid and HAS_MALNUTRITION is a random draw against it. They are synthetic, so the app never shows HAS_MALNUTRITION and only uses the probability to seed decline.
+- **Score:** `nutrition.mjs` `scoreNutrition()`, rule-based (model `nutrition_rules_v1`): low intake, drop vs the resident's own baseline, weight loss, low BMI, low fluids, missed meals, chewing difficulty. Points x 10 = risk 0-100; watch at 30, alert at 70; every point returned as a driver with evidence.
+- **Replay:** `npm.cmd run replay-nutrition` registers all residents in one transaction, then writes one day for everyone per tick in a single batch (`writeNutritionDayBatch`), and runs ANALYZE so the list query stays fast.
+- **API:** `/api/patients` returns compact rows (risk, yesterday's risk, top reason, intake, weight change, alert); `/api/resident?id=` the full record incl. NHANES screening; `/api/nutrition-history` the daily logs; sign-off is `/api/actions/nutrition-review`.
+- **UI:** resident list grouped by urgency (Needs review / Watch open; On track / No log collapsed), compact rows, wing filter, "New" when risk rose a tier since yesterday.
 
 ## What the project is (original sepsis prototype)
 

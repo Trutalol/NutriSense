@@ -14,6 +14,7 @@ const ICONS={
   eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
   users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   triangle:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
@@ -38,8 +39,9 @@ const ICONS={
 };
 const icon=name=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]||''}</svg>`;
 document.querySelectorAll('i[data-icon]').forEach(el=>{el.outerHTML=icon(el.dataset.icon);});
-const patients=[];
-let selected,filter='all',descending=true;
+const patients=[]; // compact rows for every resident (from /api/patients)
+let selected=null,selectedId=null,filter='all',wingFilter='all',descending=true;
+let detailCache={id:null,data:null}; // full record for the selected resident (from /api/resident)
 const tier=p=>p.risk===null||p.risk===undefined?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
 const label=p=>({high:'High malnutrition risk',medium:'Nutrition watch',stable:'On track',unscored:'Not scored'})[tier(p)];
 const shortLabel=p=>({high:'High risk',medium:'Watch',stable:'On track',unscored:'No log'})[tier(p)];
@@ -52,24 +54,13 @@ const summary=p=>p.details?.summary||{};
 const profile=p=>p.details?.profile||{};
 const mealAvg=r=>{const m=[r.breakfast_pct,r.lunch_pct,r.dinner_pct].filter(v=>v!==null&&v!==undefined);return m.length?m.reduce((a,b)=>a+b,0)/m.length:null;};
 
-// Room and wing assignment for senior care facility
+// Wing and room come from the resident's bed field, e.g. "Maple 214".
 function residentLocation(p){
-  // Room number is the resident number (trailing digits of the ID, as in the display name).
+  const m=/^(\w+) (\d+)$/.exec(p.bed||'');
+  if(m)return {wing:`${m[1]} Wing`,room:`Room ${m[2]}`,full:`${m[1]} Wing · Room ${m[2]}`};
   const digits=String(p.id).match(/\d+$/);
-  const room=`Room ${digits?Number(digits[0]):p.id}`;
-  const wing='Residence Wing';
-  return { room, wing, full: `${wing} · ${room}` };
+  return {wing:'Residence Wing',room:`Room ${digits?Number(digits[0]):p.id}`,full:'Residence Wing'};
 }
-
-// Supporting bedside vitals (from the PSV replay): [label, unit, icon, outside-range test, typical range].
-const fields=[
-  ['Heart rate','bpm','heart',v=>v>100||v<50,'60–100 bpm'],
-  ['Respiratory rate','/min','wind',v=>v>20||v<10,'12–20 /min'],
-  ['Systolic BP','mmHg','gauge',v=>v<100,'100–140 mmHg'],
-  ['Temperature','°C','thermometer',v=>v>38||v<36,'36–38 °C'],
-  ['Oxygen saturation','%','droplet',v=>v<92,'95–100%']
-];
-const vitalKeys=['HR','Resp','SBP','Temp','O2Sat'];
 
 // What the care team should do for each reason the score flags.
 const CARE_STEPS={
@@ -97,29 +88,92 @@ async function loadNutrition(){
 }
 const nutritionRows=()=>nutrition.patientId===selected?.id&&Array.isArray(nutrition.rows)?nutrition.rows:[];
 
-function renderList(){
-  const query=$('#search').value.toLowerCase();
-  const shown=patients.filter(p=>(filter==='all'||(filter==='high'?['high','medium'].includes(tier(p)):tier(p)==='stable'))&&`${p.name} ${p.id} ${p.bed}`.toLowerCase().includes(query))
-    .sort((a,b)=>descending?(b.risk??-1)-(a.risk??-1):(a.risk??-1)-(b.risk??-1));
-  $('#patient-list').innerHTML=shown.map(p=>{
-    const loc=residentLocation(p),t=tier(p),top=drivers(p)[0];
-    const tag=t==='unscored'?'No nutrition log yet':top&&t!=='stable'?`${icon('utensils')} ${esc(top.label)}`:`${icon('check')} Eating well`;
-    return `<button class="patient-row ${selected?.id===p.id?'selected':''}" data-id="${esc(p.id)}" aria-pressed="${selected?.id===p.id}">
-      <div class="row-avatar ${t}">${esc(initials(p))}</div>
-      <div>
-        <strong>${esc(p.name)}</strong>
-        <small>${loc.wing} · ${loc.room}</small>
-        <span class="row-tag ${t}">${tag}</span>
-      </div>
-      <div class="row-risk ${t}">${p.risk??'—'}
-        <small>${shortLabel(p)}</small>
-      </div>
-    </button>`;
-  }).join('')||'<div class="empty">No matching residents</div>';
-  document.querySelectorAll('.patient-row').forEach(el=>el.onclick=()=>{
-    selected=patients.find(p=>p.id===el.dataset.id);
-    render();
+// ---------- Resident list: grouped by urgency, compact rows, built for hundreds of residents ----------
+const LIST_GROUPS=[['high','Needs review today'],['medium','Watch'],['stable','On track'],['unscored','No care log yet']];
+const openListGroups=new Set(['high','medium']); // quiet groups start collapsed
+const TIER_RANK={unscored:0,stable:1,medium:2,high:3};
+const tierOf=risk=>tier({risk});
+// "New" = risk moved up a tier since the previous day's score.
+const isRising=p=>p.risk!==null&&p.risk_prev!==null&&p.risk_prev!==undefined&&TIER_RANK[tierOf(p.risk)]>TIER_RANK[tierOf(p.risk_prev)];
+let lastListSignature='';
+
+function visibleResidents(){
+  const query=$('#search').value.trim().toLowerCase();
+  return patients.filter(p=>{
+    const t=tier(p);
+    if(filter==='high'&&!['high','medium'].includes(t))return false;
+    if(filter==='stable'&&t!=='stable')return false;
+    if(wingFilter!=='all'&&!(p.bed||'').startsWith(wingFilter+' '))return false;
+    return !query||`${p.name} ${p.id} ${p.bed} ${p.top_reason||''}`.toLowerCase().includes(query);
   });
+}
+
+function renderList(){
+  const query=$('#search').value.trim();
+  const shown=visibleResidents();
+  const byRisk=(a,b)=>descending?(b.risk??-1)-(a.risk??-1)||(b.risk_prev??-1)-(a.risk_prev??-1):(a.risk??-1)-(b.risk??-1);
+  // Only rebuild the list when something visible changed, so scrolling and hover are not reset every refresh.
+  const signature=JSON.stringify([selectedId,filter,wingFilter,query,descending,[...openListGroups],shown.map(p=>[p.id,p.risk,p.risk_prev,p.top_reason,p.bed])]);
+  updateFilterCounts();
+  if(signature===lastListSignature)return;
+  lastListSignature=signature;
+  if(!patients.length){$('#patient-list').innerHTML='<div class="empty">No residents yet. Run the nutrition replay to load residents.</div>';return;}
+  const html=LIST_GROUPS.map(([key,title])=>{
+    const rows=shown.filter(p=>tier(p)===key).sort(byRisk);
+    if(!rows.length)return '';
+    // A search or a matching filter opens every group that has results.
+    const open=openListGroups.has(key)||!!query||(filter==='stable'&&key==='stable');
+    const rising=rows.filter(isRising).length;
+    return `<div class="list-group ${key} ${open?'open':''}">
+      <button type="button" class="list-group-head" data-list-group="${key}" aria-expanded="${open}">
+        <span><i class="psv-caret" aria-hidden="true">▸</i>${title}</span>
+        <small>${rising?`<b>${rising} new</b> · `:''}${rows.length}</small>
+      </button>
+      ${open?rows.map(p=>{
+        const t=tier(p),loc=residentLocation(p);
+        const reason=t==='unscored'?'No care log yet':t==='stable'?(p.top_reason||'Eating well'):(p.top_reason||'Review');
+        return `<button type="button" class="res-row ${selectedId===p.id?'selected':''}" data-id="${esc(p.id)}" aria-pressed="${selectedId===p.id}">
+          <span class="res-score ${t}">${p.risk??'—'}</span>
+          <span class="res-main"><strong>${esc(p.name)}</strong><small title="${esc(loc.full)}">${esc(p.bed||'')}</small></span>
+          <span class="res-reason">${isRising(p)?'<b class="res-new">↑ New</b> ':''}${esc(reason)}${p.reason_count>1&&t!=='stable'?` <em>+${p.reason_count-1}</em>`:''}</span>
+        </button>`;
+      }).join(''):''}
+    </div>`;
+  }).join('');
+  $('#patient-list').innerHTML=html||'<div class="empty">No matching residents</div>';
+}
+
+function updateFilterCounts(){
+  const warn=patients.filter(p=>['high','medium'].includes(tier(p))).length,ok=patients.filter(p=>tier(p)==='stable').length;
+  const set=(f,text)=>{const b=document.querySelector(`[data-filter="${f}"]`);if(b&&b.textContent!==text)b.textContent=text;};
+  set('all',`All (${patients.length})`);set('high',`Warning (${warn})`);set('stable',`Stable (${ok})`);
+  const select=$('#wing-filter'),wings=[...new Set(patients.map(p=>/^(\w+) \d+$/.exec(p.bed||'')?.[1]).filter(Boolean))].sort();
+  const options='<option value="all">All wings</option>'+wings.map(w=>`<option value="${esc(w)}">${esc(w)} Wing (${patients.filter(p=>(p.bed||'').startsWith(w+' ')).length})</option>`).join('');
+  if(select&&select.dataset.options!==options){select.innerHTML=options;select.dataset.options=options;select.value=wings.includes(wingFilter)?wingFilter:'all';}
+}
+
+// Selecting a resident shows their row immediately and loads the full record (screening, reasons) in the background.
+function selectResident(id){
+  if(!id)return;
+  selectedId=id;
+  mergeSelected();
+  render();
+  loadDetail(id);
+}
+function mergeSelected(){
+  const base=patients.find(p=>p.id===selectedId);
+  selected=base?{...base,...(detailCache.id===base.id?detailCache.data:{}),loaded:detailCache.id===base.id}:null;
+}
+let detailRequest=0;
+async function loadDetail(id){
+  const request=++detailRequest;
+  try{
+    const data=await api('/api/resident?id='+encodeURIComponent(id));
+    if(request!==detailRequest||selectedId!==id)return;
+    detailCache={id,data};
+    mergeSelected();
+    render();
+  }catch{/* keep showing the last good record; the next refresh retries */}
 }
 
 function render(){
@@ -128,12 +182,9 @@ function render(){
   $('.patient-detail').hidden=!selected;
   $('#export').disabled=!selected;
   renderSummaryCards();
-  if(!selected){
-    $('#patient-list').innerHTML='<div class="empty">No residents yet. Run the nutrition replay to load residents.</div>';
-    return;
-  }
+  if(!selected)return;
   const p=selected,loc=residentLocation(p);
-  $('#initials').textContent=initials(p);
+  $('#initials').innerHTML=icon('user');
   $('#patient-name').textContent=p.name;
   $('#patient-meta').innerHTML=`ID: RES-${esc(p.id)} <span>·</span> ${loc.wing} <span>·</span> ${loc.room}`;
   for(const id of ['patient-badge','chart-badge']){
@@ -141,25 +192,16 @@ function render(){
     $('#'+id).textContent=(id==='patient-badge'?'● ':'')+label(p);
   }
 
-  renderResidentInfo(p);
-
-  // Supporting vitals.
-  const v=p.v||[];
-  $('#vitals').innerHTML=fields.map((f,i)=>{
-    const value=v[i]??null,out=value!==null&&f[3](value);
-    return `<button type="button" data-vital="${i}" aria-label="View hourly ${f[0]} chart" class="vital ${out?'warning':''}">
-      <div class="vital-label">${icon(f[2])} ${f[0]}</div>
-      <div class="vital-value">${value??'—'}<small>${f[1]}</small></div>
-      <div class="vital-status">${out?'Outside typical range':value===null?'Not measured':f[4]}</div>
-      <span class="vital-chart-hint">View hourly chart ↗</span>
-    </button>`;
-  }).join('');
+  if(!p.loaded){
+    $('#psv-context').innerHTML='<p class="psv-empty">Loading resident…</p>';
+    $('#screening').innerHTML='';
+    $('#explanation').textContent='Loading…';
+  }else renderResidentInfo(p);
 
   // Score, screening measures and the explanation all come from the stored NutriSense score.
   $('#risk-number').textContent=p.risk??'—';
   $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':p.risk>=70?'High risk · review with the nurse today':p.risk>=30?'Early changes · monitor closely':'Eating, drinking and weight on track';
-  renderScreening(p);
-  renderExplanation(p);
+  if(p.loaded){renderScreening(p);renderExplanation(p);}
 
   if(nutrition.patientId!==p.id){nutrition={patientId:p.id,rows:undefined};loadNutrition();}
   renderNutrition();
@@ -174,9 +216,9 @@ function render(){
 const SCREENING_GROUPS=[
   ['Demographics',[['age','Age'],['sex','Sex'],['race','Race/ethnicity'],['education','Education'],['marital','Marital status'],['income_ratio','Income ratio'],['exam_status','Exam status']]],
   ['Body measures',[['weight_kg','Weight (kg)'],['bmi','BMI'],['height_cm','Height (cm)'],['arm_cm','Arm circ. (cm)'],['waist_cm','Waist (cm)'],['hip_cm','Hip (cm)']]],
-  ['Diet (24-h recall)',[['diet','Diet texture'],['recall_status','Recall status'],['kcal','Calories (kcal)'],['protein_g','Protein (g)'],['carbs_g','Carbs (g)'],['fat_g','Fat (g)'],['fiber_g','Fiber (g)'],['vit_d_ug','Vitamin D (µg)'],['b12_ug','Vitamin B12 (µg)'],['calcium_mg','Calcium (mg)'],['moisture_g','Water from diet (g)']]],
+  ['Diet (24-h recall)',[['recall_status','Recall status'],['kcal','Calories (kcal)'],['protein_g','Protein (g)'],['carbs_g','Carbs (g)'],['fat_g','Fat (g)'],['fiber_g','Fiber (g)'],['vit_d_ug','Vitamin D (µg)'],['b12_ug','Vitamin B12 (µg)'],['calcium_mg','Calcium (mg)'],['moisture_g','Water from diet (g)']]],
   ['Vitals at screening',[['sbp1','Systolic BP 1'],['dbp1','Diastolic BP 1'],['sbp2','Systolic BP 2'],['dbp2','Diastolic BP 2'],['sbp3','Systolic BP 3'],['dbp3','Diastolic BP 3'],['pulse','Pulse']]],
-  ['Balance & falls',[['balance_exam','Balance exam'],['balance_test1','Balance test 1'],['balance_time_s','Balance time (s)'],['stands_unaided','Stands unaided'],['dizzy_24h','Dizzy (24 h)'],['dizzy_fall_12m','Dizzy fall (12 mo)']]]
+  ['Balance & falls',[['balance_test1','Balance test 1'],['balance_time_s','Balance time (s)'],['stands_unaided','Stands unaided'],['dizzy_24h','Dizzy (24 h)'],['dizzy_fall_12m','Dizzy fall (12 mo)']]]
 ];
 // Returns a short reason when a screening value is a concern, otherwise null.
 function screeningConcern(key,v,sc){
@@ -198,10 +240,10 @@ const openInfoGroups=new Set();
 function renderResidentInfo(p){
   const sc=p.screening||{},prof=profile(p);
   const value=key=>{
-    if(key==='diet')return prof.diet??null;
     if(key==='age')return sc.age!==undefined?(sc.age_top_coded?'80+':sc.age):(p.age??null);
     if(key==='sex')return sc.sex??(p.sex&&p.sex!=='Unknown'?p.sex:null);
-    if(key==='height_cm')return sc.height_cm??prof.height_cm??null;
+    // NHANES residents show only what NHANES measured; the generator's stand-in height is never shown as real.
+    if(key==='height_cm')return sc.source==='NHANES'?(sc.height_cm??null):(sc.height_cm??prof.height_cm??null);
     return sc[key]??null;
   };
   $('#psv-context').innerHTML=SCREENING_GROUPS.map(([title,items])=>{
@@ -220,7 +262,7 @@ function renderResidentInfo(p){
       </button>
       ${open?`<div class="psv-grid">${cells}</div>`:''}
     </div>`;
-  }).join('')+(p.screening?'<p class="psv-note">Screening profile is synthesized for this prototype (NHANES-style fields); age 80 and over is shown as 80+.</p>':'<p class="psv-note">No screening profile for this resident yet. Run the nutrition replay to load one.</p>');
+  }).join('')+(p.screening?`<p class="psv-note">${p.screening.source==='NHANES'?`Screening values from NHANES (participant ${esc(p.screening.nhanes_seqn)}). Blank = not measured; age 80 and over is shown as 80+. Daily care logs are synthesized.`:'Screening profile is synthesized for this prototype (NHANES-style fields).'}</p>`:'<p class="psv-note">No screening profile for this resident yet. Run the nutrition replay to load one.</p>');
 }
 
 function renderSummaryCards(){
@@ -230,9 +272,9 @@ function renderSummaryCards(){
   $('#roster-count').textContent=patients.length;
   $('#high-stat').innerHTML=`${open} <small>Need review today</small>`;
   $('#alert-count').textContent=open;
-  const intakes=scored.map(p=>summary(p).intake7).filter(v=>v!==null&&v!==undefined);
+  const intakes=scored.map(p=>p.intake7).filter(v=>v!==null&&v!==undefined);
   $('#avg-intake').textContent=intakes.length?fmt(intakes.reduce((a,b)=>a+b,0)/intakes.length):'—';
-  $('#losing-count').textContent=scored.filter(p=>(summary(p).weightChangePct??0)<=-2).length;
+  $('#losing-count').textContent=scored.filter(p=>(p.weight_change??0)<=-2).length;
   $('#chip-urgent-count').textContent=patients.filter(p=>tier(p)==='high').length;
   $('#chip-watch-count').textContent=patients.filter(p=>tier(p)==='medium').length;
   $('#chip-stable-count').textContent=patients.filter(p=>tier(p)==='stable').length;
@@ -336,7 +378,6 @@ function payload(p){
     profile:{age:p.age,sex:p.sex,...profile(p)},
     screening:p.screening||null,
     daily_logs:nutritionRows(),
-    supporting_vitals:Object.fromEntries(fields.map((f,i)=>[f[0],(p.v||[])[i]??null])),
     assessment_hash:p.hash||null,
     model:'NutriSense rule-based score (nutrition_rules_v1)',
     action_url:p.prediction_id?`/api/actions/nutrition-review?prediction=${p.prediction_id}`:null
@@ -490,6 +531,13 @@ $('#modal').addEventListener('click',e=>{
 });
 
 $('#search').oninput=renderList;
+$('#wing-filter').onchange=e=>{wingFilter=e.target.value;renderList();};
+$('#patient-list').addEventListener('click',event=>{
+  const head=event.target.closest('[data-list-group]');
+  if(head){const k=head.dataset.listGroup;if(openListGroups.has(k))openListGroups.delete(k);else openListGroups.add(k);renderList();return;}
+  const row=event.target.closest('.res-row');
+  if(row)selectResident(row.dataset.id);
+});
 $('#sort').onclick=()=>{descending=!descending;renderList();};
 
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{
@@ -503,11 +551,11 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
     modal('Early Alert Center',patients.filter(p=>p.risk>=70&&p.alert_status!=='acknowledged').map(p=>`
       <div class="audit-item">
         <strong>${esc(p.name)}</strong> · RES-${esc(p.id)}
-        <p>Malnutrition risk ${p.risk}/100 · ${esc(drivers(p).slice(0,2).map(d=>d.label).join(', ')||'review requested')}</p>
+        <p>Malnutrition risk ${p.risk}/100 · ${esc(p.top_reason||'review requested')}${p.reason_count>1?` +${p.reason_count-1} more`:''}</p>
         <button class="button" data-review="${esc(p.id)}">Review alert ↗</button>
       </div>`).join('')||'<p>No residents currently above the alert threshold.</p>');
     document.querySelectorAll('[data-review]').forEach(x=>{
-      x.onclick=()=>{selected=patients.find(p=>p.id===x.dataset.review);render();review();};
+      x.onclick=async()=>{selectedId=x.dataset.review;await loadDetail(selectedId);review();};
     });
   } else {
     $('#search').value='';
@@ -537,11 +585,11 @@ async function api(path,data){
 
 async function refresh(){
   const rows=await api('/api/patients');
-  const id=selected?.id;
   patients.splice(0,patients.length,...rows);
-  selected=patients.find(p=>p.id===id)||[...patients].sort((a,b)=>(b.risk??-1)-(a.risk??-1))[0];
+  if(!patients.some(p=>p.id===selectedId))selectedId=patients[0]?.id??null; // list arrives sorted by risk
+  mergeSelected();
   render();
-  loadNutrition();
+  if(selectedId){loadDetail(selectedId);loadNutrition();}
   $('.system').innerHTML='<span class="dot"></span> Resident database connected<small>Auto-refresh every 3 seconds</small>';
 }
 
@@ -574,15 +622,9 @@ const NUTRITION_SERIES={
 };
 let historySelection=null,historyRequest=0;
 
-$('#vitals').addEventListener('click',event=>{
-  const button=event.target.closest('[data-vital]');
-  if(!button)return;
-  const i=Number(button.dataset.vital);
-  openHistory({source:'vitals',key:vitalKeys[i],label:fields[i][0],unit:fields[i][1]});
-});
 $('#psv-context').addEventListener('click',event=>{
   const head=event.target.closest('[data-info-group]');
-  if(!head)return;
+  if(!head||!selected)return;
   const title=head.dataset.infoGroup;
   if(openInfoGroups.has(title))openInfoGroups.delete(title);else openInfoGroups.add(title);
   renderResidentInfo(selected);

@@ -1,51 +1,69 @@
 // Generates synthetic daily nutrition care logs for NutriSense, one CSV per resident.
-// Resident IDs, ages and sex come from the PSV files so the logs line up with the real vitals.
-import {readdir, readFile, mkdir, writeFile} from 'node:fs/promises';
+// Residents are the people in the NHANES screening file: their real age, sex, height, weight, diet recall and
+// screening answers seed each log, and their real nutrition risk inputs set how likely their intake is to decline.
+import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {parsePsv} from './psv.mjs';
-import {generateResident, formatNutritionCsv, scoreNutrition} from './nutrition.mjs';
+import {readNhanes, screeningFromNhanes, baselineRisk} from './nhanes.mjs';
+import {generateResident, formatNutritionCsv, scoreNutrition, seededRandom} from './nutrition.mjs';
 
 const help = `Usage: npm.cmd run generate -- [options]
-  --psv PATH        PSV folder used for resident IDs, ages and sex (default: project data/psv)
+  --nhanes PATH     NHANES screening CSV (default: project data/csv/data.csv)
   --out PATH        Output folder (default: project data/nutrition)
-  --min-age N       Only residents aged N or older (default: 65)
   --days N          Days of logs per resident (default: 28)
-Patterns rotate stable / gradual decline / stable / sudden drop / stable so every cohort has a mix.`;
+  --limit N         Only the first N residents (default: all)
+Every resident is assigned a wing and room. About 1 in 6 residents declines over the month; residents with lower BMI,
+arm circumference, calories and protein at screening are more likely to be among them.`;
 
-const PATTERNS = ['stable', 'gradual', 'stable', 'acute', 'stable'];
+const WINGS = ['Birch', 'Cedar', 'Maple', 'Willow'];
+
+// Chance that a resident's month includes a decline: 5% for the best-nourished, rising to about 35% for the least.
+export function declineChance(probability) {
+  if (probability === null || probability === undefined) return 0.15;
+  return Math.min(0.35, Math.max(0.05, 0.05 + (probability - 0.3) * 0.55));
+}
 
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes('--help')) { console.log(help); return; }
   const options = {};
   for (let i = 0; i < args.length; i++) {
-    if (!['--psv', '--out', '--min-age', '--days'].includes(args[i]) || !args[i + 1]) throw Error(`Invalid argument ${args[i]}\n${help}`);
+    if (!['--nhanes', '--out', '--days', '--limit'].includes(args[i]) || !args[i + 1]) throw Error(`Invalid argument ${args[i]}\n${help}`);
     options[args[i]] = args[++i];
   }
-  const psv = path.resolve(options['--psv'] ?? fileURLToPath(new URL('../data/psv/', import.meta.url)));
+  const source = path.resolve(options['--nhanes'] ?? fileURLToPath(new URL('../data/csv/data.csv', import.meta.url)));
   const out = path.resolve(options['--out'] ?? fileURLToPath(new URL('../data/nutrition/', import.meta.url)));
-  const minAge = Number(options['--min-age'] ?? 65), days = Number(options['--days'] ?? 28);
-  if (!Number.isFinite(minAge) || !Number.isInteger(days) || days < 7 || days > 365) throw Error('min-age must be a number and days 7–365.');
+  const days = Number(options['--days'] ?? 28), limit = Number(options['--limit'] ?? Infinity);
+  if (!Number.isInteger(days) || days < 7 || days > 365) throw Error('days must be 7–365.');
+  if (!(limit === Infinity || (Number.isInteger(limit) && limit > 0))) throw Error('limit must be a positive integer.');
 
-  const residents = [];
-  for (const name of (await readdir(psv)).filter(f => /\.psv$/i.test(f)).sort()) {
-    const rows = parsePsv(await readFile(path.join(psv, name), 'utf8'), name), first = rows[0];
-    if (!first || first.Age === null || first.Age < minAge) continue;
-    // Real median blood pressure and pulse from the PSV file seed the screening vitals.
-    const median = key => { const v = rows.map(r => r[key]).filter(x => x !== null).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : undefined; };
-    residents.push({id: path.basename(name, path.extname(name)), age: Math.round(first.Age), sex: first.Gender === 1 ? 'Male' : first.Gender === 0 ? 'Female' : 'Unknown',
-      vitals: {sbp: median('SBP'), dbp: median('DBP'), hr: median('HR')}});
-  }
-  if (!residents.length) throw Error(`No PSV residents aged ${minAge}+ found in ${psv}`);
+  let rows;
+  try { rows = await readNhanes(source); } catch (e) { throw Error(e.code === 'ENOENT' ? `NHANES file not found at ${source}` : e.message); }
+  rows = rows.sort((a, b) => a.SEQN - b.SEQN).slice(0, limit);
+  const perWing = Math.ceil(rows.length / WINGS.length);
 
   await mkdir(out, {recursive: true});
-  for (const [i, r] of residents.entries()) {
-    const resident = generateResident({...r, days, pattern: PATTERNS[i % PATTERNS.length]});
-    await writeFile(path.join(out, `${r.id}.csv`), formatNutritionCsv(resident.profile, resident.logs));
-    const final = scoreNutrition(resident.logs, resident.profile);
-    console.log(`${r.id}  age ${r.age}  ${resident.pattern.padEnd(7)}  final risk ${String(final.risk).padStart(3)}  weight ${final.summary.weightChangePct ?? 0}%`);
+  const tally = {stable: 0, gradual: 0, acute: 0}, finals = {high: 0, medium: 0, stable: 0};
+  for (const [i, row] of rows.entries()) {
+    const id = `r${row.SEQN}`;
+    const screening = screeningFromNhanes(row);
+    const roll = seededRandom(`${id}:pattern`);
+    const pattern = roll() < declineChance(baselineRisk(row)) ? (roll() < 0.6 ? 'gradual' : 'acute') : 'stable';
+    const wing = WINGS[Math.floor(i / perWing)], room = 101 + (i % perWing);
+    const resident = generateResident({
+      id, age: row.RIDAGEYR, sex: screening.sex ?? 'Unknown', days, pattern, screening,
+      baseline: {height_cm: row.BMXHT ?? undefined, weight_kg: row.BMXWT ?? undefined, kcal: row.DR1TKCAL},
+      extra: {wing, room, nhanes_seqn: row.SEQN},
+    });
+    await writeFile(path.join(out, `${id}.csv`), formatNutritionCsv(resident.profile, resident.logs));
+    tally[pattern]++;
+    finals[scoreNutrition(resident.logs, resident.profile).tier]++;
   }
-  console.log(`Wrote ${residents.length} synthetic nutrition logs (${days} days each) to ${out}`);
+  console.log(`Wrote ${rows.length} residents (${days} days each) to ${out}`);
+  console.log(`Patterns: ${tally.stable} stable, ${tally.gradual} gradual decline, ${tally.acute} sudden drop`);
+  console.log(`Final day: ${finals.high} high risk, ${finals.medium} watch, ${finals.stable} on track`);
 }
-main().catch(e => { console.error('Generate failed:', e.message); process.exitCode = 1; });
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch(e => { console.error('Generate failed:', e.message); process.exitCode = 1; });
+}

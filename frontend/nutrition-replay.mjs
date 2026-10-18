@@ -14,6 +14,12 @@ const help = `Usage: npm.cmd run replay-nutrition -- [options]
   --dry-run           Validate and print each resident's final score without touching the database
 Each tick writes one day of care logs for every resident and scores them. Ctrl+C stops safely.`;
 
+// Fresh table statistics keep the dashboard's resident list query fast (milliseconds instead of seconds) right after a bulk load.
+async function refreshStatistics(pool) {
+  try { await pool.query('ANALYZE septisense.patients, septisense.encounters, septisense.predictions, septisense.nutrition_logs, septisense.alerts'); }
+  catch { /* optional: needs table ownership */ }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes('--help')) { console.log(help); return; }
@@ -47,29 +53,28 @@ async function main() {
 
   const start = options['--start'] ? new Date(options['--start']) : new Date(Date.now() - (maxDay - 1) * 86400000);
   if (Number.isNaN(start.getTime())) throw Error('Invalid start date');
-  const {initialize, writeNutritionDay, pool} = await import('./database.mjs');
+  const {initialize, upsertResidents, writeNutritionDayBatch, pool} = await import('./database.mjs');
   const run = {id: randomUUID(), started_at: start.toISOString()};
   let stopped = false;
   const controller = new AbortController();
   process.once('SIGINT', () => { stopped = true; controller.abort(); console.log('\nFinishing current write, then stopping…'); });
   try {
     await initialize();
-    console.log(`Nutrition run ${run.id}`);
+    await upsertResidents(run, residents);
+    console.log(`Nutrition run ${run.id} · ${residents.length} residents registered`);
     let ticks = 0;
     for (let day = 1; day <= maxDay && !stopped && ticks < limit; day++) {
-      let saved = 0, high = 0;
-      for (const r of residents) {
-        if (stopped) break;
-        const log = r.byDay.get(day);
-        if (!log) continue;
-        const score = scoreNutrition(r.logs.filter(l => l.day <= day), r.profile);
-        if (await writeNutritionDay(run, r, log, score)) saved++;
-        if (score.risk >= 70) high++;
-      }
+      if (stopped) break;
+      const entries = residents.filter(r => r.byDay.has(day)).map(r => ({resident: r, log: r.byDay.get(day), score: scoreNutrition(r.logs.filter(l => l.day <= day), r.profile)}));
+      const started = Date.now();
+      const saved = await writeNutritionDayBatch(run, day, entries);
+      const high = entries.filter(e => e.score.risk >= 70).length, watch = entries.filter(e => e.score.risk >= 30 && e.score.risk < 70).length;
       ticks++;
-      console.log(`Day ${day}: logged ${saved} residents · ${high} at high malnutrition risk`);
+      if (day === 1) await refreshStatistics(pool);
+      console.log(`Day ${day}: logged ${saved} residents in ${((Date.now() - started) / 1000).toFixed(1)} s · ${high} high risk · ${watch} watch`);
       if (!stopped && day < maxDay && ticks < limit) await sleep(interval * 1000, undefined, {signal: controller.signal}).catch(e => { if (e.name !== 'AbortError') throw e; });
     }
+    await refreshStatistics(pool);
     console.log(stopped ? 'Stopped.' : 'Nutrition replay finished.');
   } finally { await pool.end(); }
 }

@@ -158,15 +158,20 @@ const NOTES = {
 };
 
 // Builds 28 days of logs following one of three patterns: stable, gradual decline or acute drop.
-export function generateResident({id, age, sex, days = 28, pattern, vitals = {}}) {
+// Optional real baseline (e.g. from NHANES): height_cm, weight_kg, kcal and a screening profile; anything missing is sampled.
+export function generateResident({id, age, sex, days = 28, pattern, vitals = {}, baseline = {}, screening, extra = {}}) {
   const rand = seededRandom(id);
   const normal = (mu, sd) => mu + sd * Math.sqrt(-2 * Math.log(rand() || 1e-9)) * Math.cos(2 * Math.PI * rand());
   const roll = rand();
   pattern ??= roll < 0.5 ? 'stable' : roll < 0.8 ? 'gradual' : 'acute';
-  const height_cm = Math.round(clamp(normal(sex === 'Male' ? 173 : 160, 6), 148, 192));
-  const startWeight = clamp(normal(24.5, 3), 19.5, 32) * (height_cm / 100) ** 2; // starting BMI 19.5–32
+  const sampledHeight = Math.round(clamp(normal(sex === 'Male' ? 173 : 160, 6), 148, 192));
+  const sampledBmi = clamp(normal(24.5, 3), 19.5, 32);
+  const height_cm = baseline.height_cm ?? sampledHeight;
+  const startWeight = baseline.weight_kg ?? sampledBmi * (height_cm / 100) ** 2; // sampled starting BMI 19.5–32
   const diet = ['Regular', 'Regular', 'Regular', 'Soft & bite-sized', 'Minced & moist', 'Pureed'][Math.floor(rand() * 6)];
-  const baseIntake = clamp(normal(86, 6), 70, 98);
+  // Residents who reported low calorie intake at screening start from a lower usual meal intake.
+  const lowIntake = baseline.kcal !== undefined && baseline.kcal !== null && baseline.kcal < 1400;
+  const baseIntake = clamp(normal(86, 6) - (lowIntake ? 8 : 0), 65, 98);
   const baseFluids = clamp(normal(1650, 150), 1350, 2000);
   const onset = pattern === 'gradual' ? 6 + Math.floor(rand() * 8) : pattern === 'acute' ? 16 + Math.floor(rand() * 6) : Infinity;
   const floor = pattern === 'gradual' ? clamp(normal(42, 8), 25, 55) : clamp(normal(38, 8), 20, 50);
@@ -194,8 +199,8 @@ export function generateResident({id, age, sex, days = 28, pattern, vitals = {}}
       weight_kg: weighed ? Math.round((weight + normal(0, 0.2)) * 10) / 10 : null,
       appetite: avg >= 75 ? 'Good' : avg >= 50 ? 'Fair' : 'Poor', chewing_difficulty: chewingToday, note});
   }
-  const screening = generateScreening({id, age, sex, height_cm, weight_kg: logs[0].weight_kg, pattern, vitals});
-  return {profile: {height_cm, diet, age, sex, screening}, logs, pattern};
+  screening ??= generateScreening({id, age, sex, height_cm, weight_kg: logs[0].weight_kg, pattern, vitals});
+  return {profile: {height_cm: Math.round(height_cm * 10) / 10, diet, age, sex, ...extra, screening}, logs, pattern};
 }
 
 // ---------- Screening profile (NHANES-style fields, one snapshot per resident at screening) ----------

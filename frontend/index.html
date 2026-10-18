@@ -96,16 +96,17 @@
           </div>
           <div class="search">
             <span><i data-icon="search"></i></span>
-            <input id="search" placeholder="Search resident, room, or ID" aria-label="Search residents">
+            <input id="search" placeholder="Search name, room, wing or reason" aria-label="Search residents">
           </div>
           <div class="filters">
             <button class="selected" data-filter="all">All residents</button>
             <button data-filter="high">Warning</button>
             <button data-filter="stable">Stable</button>
           </div>
+          <select id="wing-filter" class="wing-filter" aria-label="Filter by wing"><option value="all">All wings</option></select>
           <div id="patient-list"></div>
           <div class="roster-footer">
-            <span class="dot"></span> Care logs synced <span>Daily</span>
+            <span class="dot"></span> Care logs synced daily <span>NHANES screening</span>
           </div>
         </section>
 
@@ -115,7 +116,7 @@
           <section class="panel patient-panel">
             <div class="patient-head">
               <div class="patient-identity">
-                <div class="patient-avatar" id="initials">JM</div>
+                <div class="patient-avatar" id="initials" aria-hidden="true"></div>
                 <div>
                   <h2 id="patient-name">James Mitchell</h2>
                   <p id="patient-meta">RES-0402 <span>·</span> 67 years, Male <span>·</span> Room 204-B (Post-Acute Wing)</p>
@@ -149,12 +150,6 @@
               <span>DAILY NUTRITION</span>
             </div>
             <div class="vitals nutrition-cards" id="nutrition-cards"></div>
-
-            <!-- Supporting bedside vitals -->
-            <div class="section-label">
-              <span>SUPPORTING VITALS</span>
-            </div>
-            <div class="vitals" id="vitals"></div>
           </section>
 
           <!-- Analytics Grid: Risk Trend & Clinical Scores -->
@@ -252,7 +247,7 @@
       <!-- Page Footer -->
       <footer class="page-footer">
         <span><i data-icon="pulse"></i> NutriSense <span>·</span> Early Malnutrition Detection <span>·</span> Designed with empathy for care teams</span>
-        <span>Prototype · synthesized care logs + PhysioNet vitals · Timescale on Tiger Data</span>
+        <span>Prototype · NHANES screening data + synthesized daily care logs · Timescale on Tiger Data</span>
       </footer>
     </div>
   </main>
