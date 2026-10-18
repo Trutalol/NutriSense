@@ -211,6 +211,12 @@ h1 {
 .chip.green { background: #f1f1f1; color: #5a5a5a; border: 1px solid #e2e2e2; }
 .chip.blue { background: #f3f3f3; color: #5a5a5a; border: 1px solid #e2e2e2; }
 .page-actions { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.risk-mode { display: flex; align-items: center; gap: 2px; background: #d4d4d4; padding: 3px; border-radius: 7px; }
+.risk-mode > span { font-size: 10px; color: #6b6b6b; font-weight: 600; padding: 0 8px 0 7px; }
+.risk-mode button { border: 0; background: none; color: #4a4a4a; font: inherit; font-size: 11px; font-weight: 500; padding: 6px 11px; border-radius: 5px; cursor: pointer; transition: background .15s, color .15s; }
+.risk-mode button:hover { background: #c4c4c4; color: #1f1f1f; }
+.risk-mode button[aria-pressed="true"] { background: #ffffff; color: #1f1f1f; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.risk-number em { font-style: normal; }
 .button {
   border: 1px solid var(--border);
   border-radius: 6px;

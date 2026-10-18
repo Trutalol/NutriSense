@@ -39,10 +39,21 @@ const ICONS={
 };
 const icon=name=>`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]||''}</svg>`;
 document.querySelectorAll('i[data-icon]').forEach(el=>{el.outerHTML=icon(el.dataset.icon);});
-const patients=[]; // compact rows for every resident (from /api/patients)
+const rawPatients=[]; // compact rows for every resident, as stored (from /api/patients)
+const patients=[]; // the same rows with the risk shown in the chosen mode (see scoreView)
+// Risk score mode: 'all' = daily care-log signs + screening model (the stored score); 'ai' = the AI model's prediction alone.
+let riskMode=(()=>{try{return localStorage.getItem('nutrisense-risk-mode')==='ai'?'ai':'all';}catch{return 'all';}})();
+const capFirst=t=>t?t[0].toUpperCase()+t.slice(1):t;
+// In AI mode a resident's risk is the model's predicted chance of malnutrition (0–100%); 70%+ is high, 60%+ is watch.
+function scoreView(row){
+  if(riskMode!=='ai')return row;
+  const m=row.model_risk??null,f=Array.isArray(row.model_factors)?row.model_factors:[];
+  return {...row,risk:m,risk_prev:m,combined_risk:row.risk,
+    top_reason:m===null?null:m>=60?(f.length?capFirst(f[0]):'Elevated predicted risk'):'Low predicted risk',reason_count:m!==null&&m>=60?f.length:0};
+}
 let selected=null,selectedId=null,filter='all',wingFilter='all',descending=true;
 let detailCache={id:null,data:null}; // full record for the selected resident (from /api/resident)
-const tier=p=>p.risk===null||p.risk===undefined?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
+const tier=p=>p.risk===null||p.risk===undefined?'unscored':p.risk>=70?'high':p.risk>=(riskMode==='ai'?60:30)?'medium':'stable';
 const label=p=>({high:'High malnutrition risk',medium:'Nutrition watch',stable:'Stable',unscored:'Not scored'})[tier(p)];
 const shortLabel=p=>({high:'High risk',medium:'Watch',stable:'Stable',unscored:'No log'})[tier(p)];
 // "Resident 100013" shows as "13"; other names use their initials.
@@ -93,7 +104,7 @@ const nutritionRows=()=>nutrition.patientId===selected?.id&&Array.isArray(nutrit
 // High-risk residents whose alert has been signed off move out of "Needs review" into "Signed off".
 const isSignedOff=p=>tier(p)==='high'&&p.alert_status==='acknowledged';
 const listKey=p=>isSignedOff(p)?'signed':tier(p);
-const LIST_GROUPS=[['high','Needs review today'],['signed','Signed off'],['medium','Watch'],['stable','Stable'],['unscored','No care log yet']];
+const LIST_GROUPS=[['high','Critical Warning'],['signed','Signed off'],['medium','Watch'],['stable','Stable'],['unscored','No care log yet']];
 const openListGroups=new Set(['high','medium']); // quiet groups start collapsed
 const TIER_RANK={unscored:0,stable:1,medium:2,high:3};
 const tierOf=risk=>tier({risk});
@@ -168,8 +179,8 @@ function selectResident(id){
   loadDetail(id);
 }
 function mergeSelected(){
-  const base=patients.find(p=>p.id===selectedId);
-  selected=base?{...base,...(detailCache.id===base.id?detailCache.data:{}),loaded:detailCache.id===base.id}:null;
+  const base=rawPatients.find(p=>p.id===selectedId);
+  selected=base?{...scoreView({...base,...(detailCache.id===base.id?detailCache.data:{})}),loaded:detailCache.id===base.id}:null;
 }
 let detailRequest=0;
 async function loadDetail(id){
@@ -208,7 +219,9 @@ function render(){
 
   // Score, screening measures and the explanation all come from the stored NutriSense score.
   $('#risk-number').textContent=p.risk??'—';
-  $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':signed?`Reviewed and signed off${p.signed_off_at?' '+new Date(p.signed_off_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''} · keep monitoring`:p.risk>=70?'High risk · review with the nurse today':p.risk>=30?'Early changes · monitor closely':'Eating, drinking and weight on track';
+  $('#risk-unit').textContent=riskMode==='ai'?'%':'/100';
+  $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':signed?`Reviewed and signed off${p.signed_off_at?' '+new Date(p.signed_off_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''} · keep monitoring`:riskMode==='ai'?(tier(p)==='high'?'AI predicts high risk · review with the nurse today':tier(p)==='medium'?'AI predicts elevated risk · monitor closely':'AI predicts low risk')
+    :tier(p)==='high'?'High risk · review with the nurse today':tier(p)==='medium'?'Early changes · monitor closely':'Eating, drinking and weight on track';
   if(p.loaded){renderScreening(p);renderExplanation(p);}
 
   if(nutrition.patientId!==p.id){nutrition={patientId:p.id,rows:undefined};loadNutrition();}
@@ -274,7 +287,7 @@ function renderResidentInfo(p){
       </button>
       ${open?`<div class="psv-grid">${cells}</div>`:''}
     </div>`;
-  }).join('')+(p.screening?`<p class="psv-note">${p.screening.source==='NHANES'?`Screening values from NHANES (participant ${esc(p.screening.nhanes_seqn)}). Blank = not measured; age 80 and over is shown as 80+. Daily care logs are synthesized.`:'Screening profile is synthesized for this prototype (NHANES-style fields).'}</p>`:'<p class="psv-note">No screening profile for this resident yet. Run the nutrition replay to load one.</p>');
+  }).join('')+(p.screening?`<p class="psv-note">Blank = not measured; age 80 and over is shown as 80+.</p>`:'<p class="psv-note">No screening profile for this resident yet. Run the nutrition replay to load one.</p>');
 }
 
 function renderSummaryCards(){
@@ -306,7 +319,7 @@ function renderScreening(p){
     meter('Weight change','Since first weigh-in',s.weightChangePct,s.weightChangePct===null||s.weightChangePct===undefined?'—':`${s.weightChangePct>0?'+':''}${fmt(s.weightChangePct,1)}%`,Math.abs(s.weightChangePct??0)*10,flagged.has('weight'))+
     meter('Fluids','3-day average · goal 1,500 mL',s.fluids3,`${fmt(s.fluids3)} mL`,(s.fluids3??0)/20,flagged.has('fluids'))+
     meter('BMI','Older adults: below 21 is a concern',s.bmi,fmt(s.bmi,1),((s.bmi??15)-15)/15*100,flagged.has('bmi'))+
-    meter('Screening model','Ridge model on NHANES screening · 60%+ adds risk',s.modelRisk,s.modelRisk===null||s.modelRisk===undefined?'—':`${s.modelRisk}%`,s.modelRisk??0,flagged.has('model'));
+    meter('Predicted malnutrition risk','From screening · 60%+ raises the score',s.modelRisk,s.modelRisk===null||s.modelRisk===undefined?'—':`${s.modelRisk}%`,s.modelRisk??0,flagged.has('model'));
 }
 
 function renderExplanation(p){
@@ -318,8 +331,19 @@ function renderExplanation(p){
     $('#plan-steps').innerHTML='<li>Start recording meals, fluids and weekly weights.</li>';
     return;
   }
+  if(riskMode==='ai'){
+    const f=profile(p).screening_model?.factors||[];
+    $('#explanation').innerHTML=`<strong>AI prediction for ${esc(p.name)}:</strong> the screening model gives a ${p.risk}% chance of malnutrition${f.length?`, mainly from ${f.map(esc).join(', ')}`:''}. Daily meals, fluids and weight are not counted in this view.`;
+    $('#drivers').innerHTML=f.length?f.map(x=>`<span class="driver">↗ ${esc(capFirst(x))}</span>`).join(''):'<span class="driver">No strong risk factors</span>';
+    $('#clinical-context').innerHTML='The AI model looks only at the resident\'s screening results (body measures, diet recall, blood pressure and balance). Switch to "All factors" to include the daily care logs.';
+    const steps=[];
+    if(p.risk>=60)steps.push(`<li><strong>${CARE_STEPS.model[0]}:</strong> ${CARE_STEPS.model[1]}</li>`);
+    if(p.risk>=70)steps.push('<li><strong>Nurse review:</strong> Assess today and share the SBAR handoff with the physician.</li>');
+    $('#plan-steps').innerHTML=steps.join('')||'<li><strong>Routine:</strong> Continue recording meals and fluids each shift and weighing weekly.</li>';
+    return;
+  }
   $('#explanation').innerHTML=ds.length
-    ?`<strong>Why ${esc(p.name)} was flagged:</strong> a score of ${p.risk}/100 built from ${ds.length} warning sign${ds.length===1?'':'s'} in the care logs — ${ds.map(d=>esc(d.label.replace(/^[A-Z][a-z]/,m=>m.toLowerCase()))).join(', ')}.`
+    ?`<strong>Flag brief:</strong> a score of ${p.risk}/100 built from ${ds.length} warning sign${ds.length===1?'':'s'} in the care logs — ${ds.map(d=>esc(d.label.replace(/^[A-Z][a-z]/,m=>m.toLowerCase()))).join(', ')}.`
     :`<strong>${esc(p.name)} is on track:</strong> eating ${fmt(s.intake7)}% of meals, drinking about ${fmt(s.fluids3)} mL a day, and weight is steady.`;
   $('#drivers').innerHTML=ds.length?ds.map(d=>`<span class="driver" title="+${d.points} points">↗ ${esc(d.label)} · ${esc(d.detail)}</span>`).join(''):'<span class="driver">No warning signs</span>';
   $('#clinical-context').innerHTML=`Weight loss in older adults is often noticed late, after weeks of eating less. NutriSense watches each resident's own normal so small, steady drops show up early.${s.latestNote?` <br><br><strong>Latest CNA note:</strong> “${esc(s.latestNote)}”`:''}`;
@@ -356,11 +380,12 @@ function renderNutrition(){
 
   // Risk trajectory: the real daily NutriSense score.
   const series=rows.filter(r=>r.risk!==null&&r.risk!==undefined);
-  const show=p.risk!==null&&series.length>1;
+  // The AI prediction comes from one-time screening results, so it has no day-by-day trend to chart.
+  const show=riskMode!=='ai'&&p.risk!==null&&series.length>1;
   $('.chart').hidden=!show;
   $('.chart-legend').hidden=!show;
   $('.risk-panel').classList.toggle('compact',!show);
-  $('#trajectory-tag').textContent=series.length?`Daily score · ${series.length} days`:'Daily score';
+  $('#trajectory-tag').textContent=riskMode==='ai'?'AI prediction · from screening':series.length?`Daily score · ${series.length} days`:'Daily score';
   if(!show)return;
   const x=i=>35+i*540/(series.length-1),y=v=>155-Math.max(1,v)*1.35;
   const d=series.map((r,i)=>`${i?'L':'M'}${x(i)},${y(r.risk)}`).join(' ');
@@ -603,7 +628,8 @@ async function api(path,data){
 
 async function refresh(){
   const rows=await api('/api/patients');
-  patients.splice(0,patients.length,...rows);
+  rawPatients.splice(0,rawPatients.length,...rows);
+  patients.splice(0,patients.length,...rows.map(scoreView));
   if(!patients.some(p=>p.id===selectedId))selectedId=patients[0]?.id??null; // list arrives sorted by risk
   mergeSelected();
   render();
@@ -789,3 +815,20 @@ $('#delete-all-patients').onclick=()=>{
     }
   };
 };
+
+// ---------- Risk score mode toggle ----------
+function applyRiskMode(){
+  document.querySelectorAll('.risk-mode button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===riskMode)));
+  patients.splice(0,patients.length,...rawPatients.map(scoreView));
+  lastListSignature=null;
+  mergeSelected();
+  render();
+}
+document.querySelector('.risk-mode').addEventListener('click',e=>{
+  const b=e.target.closest('[data-mode]');
+  if(!b||b.dataset.mode===riskMode)return;
+  riskMode=b.dataset.mode;
+  try{localStorage.setItem('nutrisense-risk-mode',riskMode);}catch{}
+  applyRiskMode();
+});
+applyRiskMode();

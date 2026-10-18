@@ -62,6 +62,11 @@
           <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">0</b> Stable</span>
         </div>
         <div class="page-actions">
+          <div class="risk-mode" role="group" aria-label="Risk score shown">
+            <span>Risk score</span>
+            <button type="button" data-mode="all" aria-pressed="true">All factors</button>
+            <button type="button" data-mode="ai" aria-pressed="false">AI prediction only</button>
+          </div>
           <button class="button danger" id="delete-all-patients">Delete all residents</button>
           <button class="button" id="export"><i data-icon="download"></i> &nbsp; Export care report</button>
         </div>
@@ -107,7 +112,7 @@
           <select id="wing-filter" class="wing-filter" aria-label="Filter by wing"><option value="all">All wings</option></select>
           <div id="patient-list"></div>
           <div class="roster-footer">
-            <span class="dot"></span> Care logs synced daily <span>NHANES screening</span>
+            <span class="dot"></span> Care logs synced daily
           </div>
         </section>
 
@@ -162,7 +167,7 @@
               </div>
               <div class="risk-number">
                 <strong id="risk-number">—</strong>
-                <span>/100<small id="risk-change"></small></span>
+                <span><em id="risk-unit">/100</em><small id="risk-change"></small></span>
                 <span class="badge high" id="chart-badge">High risk</span>
               </div>
               <div class="chart">
@@ -200,17 +205,13 @@
                 <span class="info" title="Thresholds follow MUST and MNA-SF screening and the MDS 75% meal-intake trigger">ⓘ</span>
               </div>
               <div class="screening" id="screening"></div>
-              <div class="score-note">
-                Daily care-log signs + screening model
-                <small>Rules based on MUST / MNA-SF · ridge model trained on NHANES (CV AUC 0.62)</small>
-              </div>
             </section>
           </div>
 
           <!-- Explainable AI Panel (Bonus Requirement!) -->
           <section class="panel insights">
             <div class="panel-title">
-              <h2><span class="spark"><i data-icon="sparkle"></i></span> Behind the Alert · Why Was This Resident Flagged?</h2>
+              <h2><span class="spark"><i data-icon="sparkle"></i></span> Flag Information</h2>
               <span class="mini-tag highlight">EXPLAINABLE SCORE</span>
             </div>
             
@@ -248,7 +249,7 @@
       <!-- Page Footer -->
       <footer class="page-footer">
         <span><i data-icon="pulse"></i> NutriSense <span>·</span> Early Malnutrition Detection <span>·</span> Designed with empathy for care teams</span>
-        <span>Prototype · NHANES screening data + synthesized daily care logs · Timescale on Tiger Data</span>
+        <span>Prototype · screening data + synthesized daily care logs · Timescale on Tiger Data</span>
       </footer>
     </div>
   </main>

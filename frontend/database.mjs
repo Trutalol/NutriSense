@@ -59,7 +59,7 @@ const LATEST=`LEFT JOIN LATERAL (SELECT id,risk,hash,details,run_id FROM septise
 // Compact rows for the resident list: enough to sort, group and filter hundreds of residents without the full detail.
 export async function patients(){return (await pool.query(`SELECT p.id, p.name, p.age, p.sex, p.bed, n.risk, n.id AS prediction_id, n.hash,
  n.details->'drivers'->0->>'label' AS top_reason, jsonb_array_length(COALESCE(n.details->'drivers','[]'::jsonb)) AS reason_count,
- (n.details->'summary'->>'intake7')::float AS intake7, (n.details->'summary'->>'weightChangePct')::float AS weight_change,
+ (n.details->'summary'->>'intake7')::float AS intake7, (n.details->'summary'->>'modelRisk')::float AS model_risk, n.details->'profile'->'screening_model'->'factors' AS model_factors, (n.details->'summary'->>'weightChangePct')::float AS weight_change,
  prev.risk AS risk_prev, a.id AS alert_id, a.status AS alert_status
  FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id
  ${LATEST}
