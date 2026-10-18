@@ -57,8 +57,9 @@
       <div class="page-heading">
         <div class="header-status-chips">
           <span class="chip red" id="chip-urgent"><i data-icon="alert"></i> <b id="chip-urgent-count">0</b> High risk</span>
+          <span class="chip green signed-chip" id="chip-signed"><i data-icon="check"></i> <b id="chip-signed-count">0</b> Signed off</span>
           <span class="chip yellow" id="chip-watch"><i data-icon="eye"></i> <b id="chip-watch-count">0</b> Watch</span>
-          <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">0</b> On track</span>
+          <span class="chip green" id="chip-stable"><i data-icon="check"></i> <b id="chip-stable-count">0</b> Stable</span>
         </div>
         <div class="page-actions">
           <button class="button danger" id="delete-all-patients">Delete all residents</button>
@@ -200,8 +201,8 @@
               </div>
               <div class="screening" id="screening"></div>
               <div class="score-note">
-                Each resident is compared with their own normal
-                <small>Based on MUST / MNA-SF screening criteria</small>
+                Daily care-log signs + screening model
+                <small>Rules based on MUST / MNA-SF · ridge model trained on NHANES (CV AUC 0.62)</small>
               </div>
             </section>
           </div>

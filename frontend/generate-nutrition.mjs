@@ -1,10 +1,11 @@
 // Generates synthetic daily nutrition care logs for NutriSense, one CSV per resident.
 // Residents are the people in the NHANES screening file: their real age, sex, height, weight, diet recall and
-// screening answers seed each log, and their real nutrition risk inputs set how likely their intake is to decline.
+// screening answers seed each log, and the screening model's prediction sets how likely their intake is to decline.
 import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {readNhanes, screeningFromNhanes, baselineRisk} from './nhanes.mjs';
+import {readNhanes, screeningFromNhanes} from './nhanes.mjs';
+import {screeningModelResult} from './model.mjs';
 import {generateResident, formatNutritionCsv, scoreNutrition, seededRandom} from './nutrition.mjs';
 
 const help = `Usage: npm.cmd run generate -- [options]
@@ -12,12 +13,12 @@ const help = `Usage: npm.cmd run generate -- [options]
   --out PATH        Output folder (default: project data/nutrition)
   --days N          Days of logs per resident (default: 28)
   --limit N         Only the first N residents (default: all)
-Every resident is assigned a wing and room. About 1 in 6 residents declines over the month; residents with lower BMI,
-arm circumference, calories and protein at screening are more likely to be among them.`;
+Every resident is assigned a wing and room. About 1 in 6 residents declines over the month; residents the screening
+model (model.json) rates as higher risk are more likely to be among them. The file's own risk columns are never used.`;
 
 const WINGS = ['Birch', 'Cedar', 'Maple', 'Willow'];
 
-// Chance that a resident's month includes a decline: 5% for the best-nourished, rising to about 35% for the least.
+// Chance that a resident's month includes a decline, from the screening model's probability: 5% at the low end, up to 35%.
 export function declineChance(probability) {
   if (probability === null || probability === undefined) return 0.15;
   return Math.min(0.35, Math.max(0.05, 0.05 + (probability - 0.3) * 0.55));
@@ -48,12 +49,13 @@ async function main() {
     const id = `r${row.SEQN}`;
     const screening = screeningFromNhanes(row);
     const roll = seededRandom(`${id}:pattern`);
-    const pattern = roll() < declineChance(baselineRisk(row)) ? (roll() < 0.6 ? 'gradual' : 'acute') : 'stable';
+    const screeningModel = screeningModelResult(row);
+    const pattern = roll() < declineChance(screeningModel.probability) ? (roll() < 0.6 ? 'gradual' : 'acute') : 'stable';
     const wing = WINGS[Math.floor(i / perWing)], room = 101 + (i % perWing);
     const resident = generateResident({
       id, age: row.RIDAGEYR, sex: screening.sex ?? 'Unknown', days, pattern, screening,
       baseline: {height_cm: row.BMXHT ?? undefined, weight_kg: row.BMXWT ?? undefined, kcal: row.DR1TKCAL},
-      extra: {wing, room, nhanes_seqn: row.SEQN},
+      extra: {wing, room, nhanes_seqn: row.SEQN, screening_model: screeningModel},
     });
     await writeFile(path.join(out, `${id}.csv`), formatNutritionCsv(resident.profile, resident.logs));
     tally[pattern]++;

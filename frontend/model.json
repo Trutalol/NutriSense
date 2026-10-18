@@ -1,0 +1,546 @@
+{
+ "name": "NutriSense screening model",
+ "version": "ridge_logreg_v1",
+ "type": "L2-penalised logistic regression (ridge)",
+ "sklearn_params": {
+  "model__penalty": "l2",
+  "model__C": 0.018873918221350976,
+  "model__intercept_scaling": 10.0,
+  "model__class_weight": null,
+  "solver": "liblinear"
+ },
+ "target": "HAS_MALNUTRITION",
+ "trained_rows": 518,
+ "positive_rate": 0.5057915057915058,
+ "excluded_columns": [
+  "MALNUTRITION_RISK_SCORE",
+  "MALNUTRITION_PROBABILITY_SYNTHETIC",
+  "MALNUTRITION_RANDOM_DRAW",
+  "HAS_MALNUTRITION"
+ ],
+ "not_used_by_design": [
+  "RIDRETH3",
+  "DMDEDUC2",
+  "DMDMARTZ",
+  "INDFMPIR",
+  "RIDSTATR",
+  "DR1DRSTZ"
+ ],
+ "validation": {
+  "method": "5-fold stratified CV, repeated 10x",
+  "auc_mean": 0.6241628384635086,
+  "auc_sd": 0.0501961845433824,
+  "out_of_fold_auc": 0.6113057609732824,
+  "label_ceiling_auc": 0.6535514074427481
+ },
+ "intercept": 0.05747301392644782,
+ "numeric": [
+  {
+   "column": "RIDAGEYR",
+   "label": "Age",
+   "median": 73.0,
+   "mean": 73.0,
+   "scale": 5.184994685066696,
+   "coef": 0.05134011785463497
+  },
+  {
+   "column": "BMXWT",
+   "label": "Weight",
+   "median": 79.1,
+   "mean": 80.73976833976835,
+   "scale": 17.729953102362412,
+   "coef": -0.15748278028080623
+  },
+  {
+   "column": "BMXBMI",
+   "label": "BMI",
+   "median": 28.5,
+   "mean": 29.37779922779923,
+   "scale": 5.6370798546655205,
+   "coef": -0.16557365751188505
+  },
+  {
+   "column": "BMXHT",
+   "label": "Height",
+   "median": 165.2,
+   "mean": 165.14208494208492,
+   "scale": 8.636664520021307,
+   "coef": 0.021829217305411854
+  },
+  {
+   "column": "BMXARMC",
+   "label": "Arm circumference",
+   "median": 32.1,
+   "mean": 32.483204633204636,
+   "scale": 4.010561318012527,
+   "coef": -0.12232920235911
+  },
+  {
+   "column": "BMXWAIST",
+   "label": "Waist",
+   "median": 102.7,
+   "mean": 103.57413127413129,
+   "scale": 13.34633937918806,
+   "coef": -0.08289070944662746
+  },
+  {
+   "column": "BMXHIP",
+   "label": "Hip",
+   "median": 104.4,
+   "mean": 106.36023166023168,
+   "scale": 11.717257902976547,
+   "coef": -0.003999992725363758
+  },
+  {
+   "column": "DR1TKCAL",
+   "label": "Calories",
+   "median": 1726.0,
+   "mean": 1848.4092664092664,
+   "scale": 711.681563041239,
+   "coef": -0.09495296300220207
+  },
+  {
+   "column": "DR1TPROT",
+   "label": "Protein",
+   "median": 64.16,
+   "mean": 68.44030888030888,
+   "scale": 30.46450665186716,
+   "coef": -0.10061204933871207
+  },
+  {
+   "column": "DR1TCARB",
+   "label": "Carbs",
+   "median": 193.655,
+   "mean": 207.8588030888031,
+   "scale": 92.50833050412307,
+   "coef": -0.06560402645133473
+  },
+  {
+   "column": "DR1TTFAT",
+   "label": "Fat",
+   "median": 75.34,
+   "mean": 79.68565637065636,
+   "scale": 35.871379830980075,
+   "coef": 0.018822469966322305
+  },
+  {
+   "column": "DR1TFIBE",
+   "label": "Fiber",
+   "median": 14.6,
+   "mean": 15.72220077220077,
+   "scale": 7.674625327732975,
+   "coef": -0.026353966943529768
+  },
+  {
+   "column": "DR1TVD",
+   "label": "Vitamin D",
+   "median": 3.45,
+   "mean": 4.233590733590734,
+   "scale": 3.8658852251216342,
+   "coef": 0.049770292113788334
+  },
+  {
+   "column": "DR1TVB12",
+   "label": "Vitamin B12",
+   "median": 2.925,
+   "mean": 3.48503861003861,
+   "scale": 3.1760819605499617,
+   "coef": -0.0008866892608185686
+  },
+  {
+   "column": "DR1TCALC",
+   "label": "Calcium",
+   "median": 762.5,
+   "mean": 843.523166023166,
+   "scale": 474.27980399224083,
+   "coef": 0.044127556626339604
+  },
+  {
+   "column": "DR1TMOIS",
+   "label": "Water from diet",
+   "median": 2441.385,
+   "mean": 2527.38501930502,
+   "scale": 908.8898348824272,
+   "coef": -0.07741005625984225
+  },
+  {
+   "column": "BPXOSY1",
+   "label": "Systolic BP 1",
+   "median": 129.0,
+   "mean": 130.75482625482624,
+   "scale": 16.696117906721334,
+   "coef": 0.01819571993621275
+  },
+  {
+   "column": "BPXODI1",
+   "label": "Diastolic BP 1",
+   "median": 72.0,
+   "mean": 72.95559845559846,
+   "scale": 9.576352265416565,
+   "coef": 0.04823676963920145
+  },
+  {
+   "column": "BPXOSY2",
+   "label": "Systolic BP 2",
+   "median": 128.0,
+   "mean": 129.84169884169884,
+   "scale": 16.91741348336733,
+   "coef": 0.03166176237985711
+  },
+  {
+   "column": "BPXODI2",
+   "label": "Diastolic BP 2",
+   "median": 72.0,
+   "mean": 72.11583011583012,
+   "scale": 9.709591066252074,
+   "coef": 0.0657736521073505
+  },
+  {
+   "column": "BPXOSY3",
+   "label": "Systolic BP 3",
+   "median": 128.0,
+   "mean": 129.44015444015443,
+   "scale": 16.95335667880703,
+   "coef": -0.04699912978934191
+  },
+  {
+   "column": "BPXODI3",
+   "label": "Diastolic BP 3",
+   "median": 71.0,
+   "mean": 71.41505791505791,
+   "scale": 9.532687368814175,
+   "coef": 0.011310512827660784
+  },
+  {
+   "column": "BPXOPLS1",
+   "label": "Pulse",
+   "median": 68.0,
+   "mean": 68.61196911196912,
+   "scale": 10.51869137884415,
+   "coef": -0.11077532992864787
+  },
+  {
+   "column": "BAXTC11",
+   "label": "Balance time",
+   "median": 15.0,
+   "mean": 15.0,
+   "scale": 1.0,
+   "coef": 0.0
+  }
+ ],
+ "missing_indicators": [
+  {
+   "column": "BMXWT",
+   "label": "Weight not measured",
+   "mean": 0.22972972972972974,
+   "scale": 0.4206589842236049,
+   "coef": 0.04201335811938231
+  },
+  {
+   "column": "BMXBMI",
+   "label": "BMI not measured",
+   "mean": 0.23552123552123552,
+   "scale": 0.42432414866442164,
+   "coef": 0.028854430275288858
+  },
+  {
+   "column": "BMXHT",
+   "label": "Height not measured",
+   "mean": 0.22972972972972974,
+   "scale": 0.4206589842236049,
+   "coef": 0.00562286174866432
+  },
+  {
+   "column": "BMXARMC",
+   "label": "Arm circumference not measured",
+   "mean": 0.24517374517374518,
+   "scale": 0.4301901670787288,
+   "coef": -0.03958331168489601
+  },
+  {
+   "column": "BMXWAIST",
+   "label": "Waist not measured",
+   "mean": 0.2722007722007722,
+   "scale": 0.44509270024802194,
+   "coef": -0.029167148853221445
+  },
+  {
+   "column": "BMXHIP",
+   "label": "Hip not measured",
+   "mean": 0.2799227799227799,
+   "scale": 0.4489610419658735,
+   "coef": -0.10730514638109685
+  },
+  {
+   "column": "DR1TKCAL",
+   "label": "Calories not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TPROT",
+   "label": "Protein not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TCARB",
+   "label": "Carbs not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TTFAT",
+   "label": "Fat not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TFIBE",
+   "label": "Fiber not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TVD",
+   "label": "Vitamin D not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TVB12",
+   "label": "Vitamin B12 not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TCALC",
+   "label": "Calcium not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "DR1TMOIS",
+   "label": "Water from diet not measured",
+   "mean": 0.33204633204633205,
+   "scale": 0.47094751875438207,
+   "coef": 0.00018481156232742386
+  },
+  {
+   "column": "BPXOSY1",
+   "label": "Systolic BP 1 not measured",
+   "mean": 0.23745173745173745,
+   "scale": 0.42552133886902616,
+   "coef": 0.0206141360585981
+  },
+  {
+   "column": "BPXODI1",
+   "label": "Diastolic BP 1 not measured",
+   "mean": 0.23745173745173745,
+   "scale": 0.42552133886902616,
+   "coef": 0.0206141360585981
+  },
+  {
+   "column": "BPXOSY2",
+   "label": "Systolic BP 2 not measured",
+   "mean": 0.2413127413127413,
+   "scale": 0.42787954168535713,
+   "coef": -0.014292815436547063
+  },
+  {
+   "column": "BPXODI2",
+   "label": "Diastolic BP 2 not measured",
+   "mean": 0.2413127413127413,
+   "scale": 0.42787954168535713,
+   "coef": -0.014292815436547063
+  },
+  {
+   "column": "BPXOSY3",
+   "label": "Systolic BP 3 not measured",
+   "mean": 0.2413127413127413,
+   "scale": 0.42787954168535713,
+   "coef": -0.014292815436547063
+  },
+  {
+   "column": "BPXODI3",
+   "label": "Diastolic BP 3 not measured",
+   "mean": 0.2413127413127413,
+   "scale": 0.42787954168535713,
+   "coef": -0.014292815436547063
+  },
+  {
+   "column": "BPXOPLS1",
+   "label": "Pulse not measured",
+   "mean": 0.23745173745173745,
+   "scale": 0.42552133886902616,
+   "coef": 0.0206141360585981
+  },
+  {
+   "column": "BAXTC11",
+   "label": "Balance time not measured",
+   "mean": 0.7644787644787645,
+   "scale": 0.42432414866442164,
+   "coef": -0.007829258771986845
+  }
+ ],
+ "categorical": [
+  {
+   "column": "RIAGENDR",
+   "label": "Sex",
+   "missing_code": -1,
+   "coef_by_value": {
+    "1": -0.034218731859765664,
+    "2": 0.03479346199903319
+   }
+  },
+  {
+   "column": "BAXPF11",
+   "label": "Balance test",
+   "missing_code": -1,
+   "coef_by_value": {
+    "-1": -0.002882774576321787,
+    "1": 0.0034575047155881032
+   }
+  },
+  {
+   "column": "BAQ110",
+   "label": "Stands unaided",
+   "missing_code": -1,
+   "coef_by_value": {
+    "-1": -0.04924370335388312,
+    "1": 0.06068021386774065,
+    "2": -0.010861780374590718
+   }
+  },
+  {
+   "column": "BAQ132",
+   "label": "Dizzy (24 h)",
+   "missing_code": -1,
+   "coef_by_value": {
+    "-1": -0.015514786563181207,
+    "1": 0.0010181771961400958,
+    "2": 0.01507133950630754
+   }
+  },
+  {
+   "column": "BAQ140",
+   "label": "Dizzy fall (12 mo)",
+   "missing_code": -1,
+   "coef_by_value": {
+    "-1": -0.015514786563181207,
+    "1": 0.02422290039335504,
+    "2": -0.008133383690907528
+   }
+  }
+ ],
+ "checks": [
+  {
+   "SEQN": 130379,
+   "probability": 0.32326527168844316
+  },
+  {
+   "SEQN": 130781,
+   "probability": 0.3436301869918283
+  },
+  {
+   "SEQN": 131347,
+   "probability": 0.49633944756577086
+  },
+  {
+   "SEQN": 131731,
+   "probability": 0.7032737374484556
+  },
+  {
+   "SEQN": 132302,
+   "probability": 0.5264879804288485
+  },
+  {
+   "SEQN": 132849,
+   "probability": 0.5062708573865538
+  },
+  {
+   "SEQN": 133384,
+   "probability": 0.46917904167310653
+  },
+  {
+   "SEQN": 133838,
+   "probability": 0.4429611273209678
+  },
+  {
+   "SEQN": 134262,
+   "probability": 0.63396965695868
+  },
+  {
+   "SEQN": 134723,
+   "probability": 0.4694802675772791
+  },
+  {
+   "SEQN": 135189,
+   "probability": 0.7035120819234676
+  },
+  {
+   "SEQN": 135922,
+   "probability": 0.5062708573865538
+  },
+  {
+   "SEQN": 136475,
+   "probability": 0.6199337215748137
+  },
+  {
+   "SEQN": 137106,
+   "probability": 0.7679803467919597
+  },
+  {
+   "SEQN": 137572,
+   "probability": 0.48901990330535566
+  },
+  {
+   "SEQN": 137988,
+   "probability": 0.5894577669658213
+  },
+  {
+   "SEQN": 138523,
+   "probability": 0.5314280055209916
+  },
+  {
+   "SEQN": 138928,
+   "probability": 0.6431083283241457
+  },
+  {
+   "SEQN": 139401,
+   "probability": 0.5770801691199253
+  },
+  {
+   "SEQN": 139932,
+   "probability": 0.48901990330535566
+  },
+  {
+   "SEQN": 140355,
+   "probability": 0.2779262748393229
+  },
+  {
+   "SEQN": 140673,
+   "probability": 0.5828345851581223
+  },
+  {
+   "SEQN": 141211,
+   "probability": 0.7491725051638602
+  },
+  {
+   "SEQN": 141963,
+   "probability": 0.36721294828499723
+  },
+  {
+   "SEQN": 142305,
+   "probability": 0.6376292788544223
+  }
+ ]
+}

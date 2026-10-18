@@ -43,8 +43,8 @@ const patients=[]; // compact rows for every resident (from /api/patients)
 let selected=null,selectedId=null,filter='all',wingFilter='all',descending=true;
 let detailCache={id:null,data:null}; // full record for the selected resident (from /api/resident)
 const tier=p=>p.risk===null||p.risk===undefined?'unscored':p.risk>=70?'high':p.risk>=30?'medium':'stable';
-const label=p=>({high:'High malnutrition risk',medium:'Nutrition watch',stable:'On track',unscored:'Not scored'})[tier(p)];
-const shortLabel=p=>({high:'High risk',medium:'Watch',stable:'On track',unscored:'No log'})[tier(p)];
+const label=p=>({high:'High malnutrition risk',medium:'Nutrition watch',stable:'Stable',unscored:'Not scored'})[tier(p)];
+const shortLabel=p=>({high:'High risk',medium:'Watch',stable:'Stable',unscored:'No log'})[tier(p)];
 // "Resident 100013" shows as "13"; other names use their initials.
 const initials=p=>{const m=/^Resident (\d+)$/.exec(p.name);return m?m[1].slice(-2):p.name.split(' ').map(n=>n[0]).join('');};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -70,7 +70,8 @@ const CARE_STEPS={
   bmi:['Low body weight','Dietitian review for oral nutritional supplements or fortified foods.'],
   fluids:['Hydration','Hydration rounds: offer a drink every hour while awake and record intake.'],
   missed:['Missed meals','Find out why meals were refused and let the nurse know the same day.'],
-  chewing:['Chewing / swallowing','Check mouth and dentures; request a speech-language pathology swallow assessment.']
+  chewing:['Chewing / swallowing','Check mouth and dentures; request a speech-language pathology swallow assessment.'],
+  model:['Screening risk','Dietitian to complete a full nutrition assessment (e.g. MNA) to confirm the screening model\'s flag.']
 };
 
 // ---------- Nutrition history (daily logs + daily scores) for the selected resident ----------
@@ -89,7 +90,10 @@ async function loadNutrition(){
 const nutritionRows=()=>nutrition.patientId===selected?.id&&Array.isArray(nutrition.rows)?nutrition.rows:[];
 
 // ---------- Resident list: grouped by urgency, compact rows, built for hundreds of residents ----------
-const LIST_GROUPS=[['high','Needs review today'],['medium','Watch'],['stable','On track'],['unscored','No care log yet']];
+// High-risk residents whose alert has been signed off move out of "Needs review" into "Signed off".
+const isSignedOff=p=>tier(p)==='high'&&p.alert_status==='acknowledged';
+const listKey=p=>isSignedOff(p)?'signed':tier(p);
+const LIST_GROUPS=[['high','Needs review today'],['signed','Signed off'],['medium','Watch'],['stable','Stable'],['unscored','No care log yet']];
 const openListGroups=new Set(['high','medium']); // quiet groups start collapsed
 const TIER_RANK={unscored:0,stable:1,medium:2,high:3};
 const tierOf=risk=>tier({risk});
@@ -119,8 +123,9 @@ function renderList(){
   lastListSignature=signature;
   if(!patients.length){$('#patient-list').innerHTML='<div class="empty">No residents yet. Run the nutrition replay to load residents.</div>';return;}
   const html=LIST_GROUPS.map(([key,title])=>{
-    const rows=shown.filter(p=>tier(p)===key).sort(byRisk);
-    if(!rows.length)return '';
+    const rows=shown.filter(p=>listKey(p)===key).sort(byRisk);
+    // The four main groups always show, even when empty, so staff can see at a glance that nothing is waiting.
+    if(!rows.length&&key==='unscored')return '';
     // A search or a matching filter opens every group that has results.
     const open=openListGroups.has(key)||!!query||(filter==='stable'&&key==='stable');
     const rising=rows.filter(isRising).length;
@@ -129,13 +134,15 @@ function renderList(){
         <span><i class="psv-caret" aria-hidden="true">▸</i>${title}</span>
         <small>${rising?`<b>${rising} new</b> · `:''}${rows.length}</small>
       </button>
+      ${open&&!rows.length?`<div class="list-group-empty">${query?'No matching residents':'None right now'}</div>`:''}
       ${open?rows.map(p=>{
         const t=tier(p),loc=residentLocation(p);
+        const signed=isSignedOff(p);
         const reason=t==='unscored'?'No care log yet':t==='stable'?(p.top_reason||'Eating well'):(p.top_reason||'Review');
-        return `<button type="button" class="res-row ${selectedId===p.id?'selected':''}" data-id="${esc(p.id)}" aria-pressed="${selectedId===p.id}">
-          <span class="res-score ${t}">${p.risk??'—'}</span>
+        return `<button type="button" class="res-row ${signed?'signed':''} ${selectedId===p.id?'selected':''}" data-id="${esc(p.id)}" aria-pressed="${selectedId===p.id}">
+          <span class="res-score ${signed?'signed':t}">${signed?icon('check'):(p.risk??'—')}</span>
           <span class="res-main"><strong>${esc(p.name)}</strong><small title="${esc(loc.full)}">${esc(p.bed||'')}</small></span>
-          <span class="res-reason">${isRising(p)?'<b class="res-new">↑ New</b> ':''}${esc(reason)}${p.reason_count>1&&t!=='stable'?` <em>+${p.reason_count-1}</em>`:''}</span>
+          <span class="res-reason">${signed?`<b class="res-signed">Signed off</b> · ${p.risk} · `:''}${isRising(p)&&!signed?'<b class="res-new">↑ New</b> ':''}${esc(reason)}${p.reason_count>1&&t!=='stable'?` <em>+${p.reason_count-1}</em>`:''}</span>
         </button>`;
       }).join(''):''}
     </div>`;
@@ -187,9 +194,10 @@ function render(){
   $('#initials').innerHTML=icon('user');
   $('#patient-name').textContent=p.name;
   $('#patient-meta').innerHTML=`ID: RES-${esc(p.id)} <span>·</span> ${loc.wing} <span>·</span> ${loc.room}`;
+  const signed=isSignedOff(p);
   for(const id of ['patient-badge','chart-badge']){
-    $('#'+id).className=`badge ${tier(p)}`;
-    $('#'+id).textContent=(id==='patient-badge'?'● ':'')+label(p);
+    $('#'+id).className=`badge ${signed?'signed':tier(p)}`;
+    $('#'+id).textContent=signed?(id==='patient-badge'?'✓ Signed off':'High risk · signed off'):(id==='patient-badge'?'● ':'')+label(p);
   }
 
   if(!p.loaded){
@@ -200,7 +208,7 @@ function render(){
 
   // Score, screening measures and the explanation all come from the stored NutriSense score.
   $('#risk-number').textContent=p.risk??'—';
-  $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':p.risk>=70?'High risk · review with the nurse today':p.risk>=30?'Early changes · monitor closely':'Eating, drinking and weight on track';
+  $('#risk-change').textContent=p.risk===null?'No nutrition log for this resident':signed?`Reviewed and signed off${p.signed_off_at?' '+new Date(p.signed_off_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''} · keep monitoring`:p.risk>=70?'High risk · review with the nurse today':p.risk>=30?'Early changes · monitor closely':'Eating, drinking and weight on track';
   if(p.loaded){renderScreening(p);renderExplanation(p);}
 
   if(nutrition.patientId!==p.id){nutrition={patientId:p.id,rows:undefined};loadNutrition();}
@@ -208,6 +216,10 @@ function render(){
 
   $('#review').disabled=!p.prediction_id;
   $('#blink-btn').disabled=!p.prediction_id;
+  // The sign-off button shows that this resident's review is done (it can still be opened to sign again).
+  const signLabel=signed?`${icon('check')} &nbsp; Signed off`:`${icon('check')} &nbsp; Sign off`;
+  if($('#blink-btn').innerHTML!==signLabel)$('#blink-btn').innerHTML=signLabel;
+  $('#blink-btn').classList.toggle('done',signed);
   $('#sbar-btn').disabled=p.risk===null;
 }
 
@@ -275,7 +287,8 @@ function renderSummaryCards(){
   const intakes=scored.map(p=>p.intake7).filter(v=>v!==null&&v!==undefined);
   $('#avg-intake').textContent=intakes.length?fmt(intakes.reduce((a,b)=>a+b,0)/intakes.length):'—';
   $('#losing-count').textContent=scored.filter(p=>(p.weight_change??0)<=-2).length;
-  $('#chip-urgent-count').textContent=patients.filter(p=>tier(p)==='high').length;
+  $('#chip-urgent-count').textContent=patients.filter(p=>tier(p)==='high'&&!isSignedOff(p)).length;
+  $('#chip-signed-count').textContent=patients.filter(isSignedOff).length;
   $('#chip-watch-count').textContent=patients.filter(p=>tier(p)==='medium').length;
   $('#chip-stable-count').textContent=patients.filter(p=>tier(p)==='stable').length;
 }
@@ -292,7 +305,8 @@ function renderScreening(p){
     meter('Meal intake','7-day average · usual '+(s.baseline!==null&&s.baseline!==undefined?fmt(s.baseline)+'%':'n/a'),s.intake7,`${fmt(s.intake7)}%`,s.intake7,flagged.has('intake')||flagged.has('decline'))+
     meter('Weight change','Since first weigh-in',s.weightChangePct,s.weightChangePct===null||s.weightChangePct===undefined?'—':`${s.weightChangePct>0?'+':''}${fmt(s.weightChangePct,1)}%`,Math.abs(s.weightChangePct??0)*10,flagged.has('weight'))+
     meter('Fluids','3-day average · goal 1,500 mL',s.fluids3,`${fmt(s.fluids3)} mL`,(s.fluids3??0)/20,flagged.has('fluids'))+
-    meter('BMI','Older adults: below 21 is a concern',s.bmi,fmt(s.bmi,1),((s.bmi??15)-15)/15*100,flagged.has('bmi'));
+    meter('BMI','Older adults: below 21 is a concern',s.bmi,fmt(s.bmi,1),((s.bmi??15)-15)/15*100,flagged.has('bmi'))+
+    meter('Screening model','Ridge model on NHANES screening · 60%+ adds risk',s.modelRisk,s.modelRisk===null||s.modelRisk===undefined?'—':`${s.modelRisk}%`,s.modelRisk??0,flagged.has('model'));
 }
 
 function renderExplanation(p){
@@ -305,7 +319,7 @@ function renderExplanation(p){
     return;
   }
   $('#explanation').innerHTML=ds.length
-    ?`<strong>Why ${esc(p.name)} was flagged:</strong> a score of ${p.risk}/100 built from ${ds.length} warning sign${ds.length===1?'':'s'} in the care logs — ${ds.map(d=>esc(d.label.toLowerCase())).join(', ')}.`
+    ?`<strong>Why ${esc(p.name)} was flagged:</strong> a score of ${p.risk}/100 built from ${ds.length} warning sign${ds.length===1?'':'s'} in the care logs — ${ds.map(d=>esc(d.label.replace(/^[A-Z][a-z]/,m=>m.toLowerCase()))).join(', ')}.`
     :`<strong>${esc(p.name)} is on track:</strong> eating ${fmt(s.intake7)}% of meals, drinking about ${fmt(s.fluids3)} mL a day, and weight is steady.`;
   $('#drivers').innerHTML=ds.length?ds.map(d=>`<span class="driver" title="+${d.points} points">↗ ${esc(d.label)} · ${esc(d.detail)}</span>`).join(''):'<span class="driver">No warning signs</span>';
   $('#clinical-context').innerHTML=`Weight loss in older adults is often noticed late, after weeks of eating less. NutriSense watches each resident's own normal so small, steady drops show up early.${s.latestNote?` <br><br><strong>Latest CNA note:</strong> “${esc(s.latestNote)}”`:''}`;
@@ -322,6 +336,10 @@ function renderNutrition(){
   $('#nutrition-context').innerHTML=last
     ?`<span>Monitoring <b>day ${last.day} of ${rows.length}</b></span><span>Last weighed <b>${weighed?`${fmt(weighed.weight_kg,1)} kg · day ${weighed.day}`:'—'}</b></span><span>Diet <b>${esc(profile(p).diet||'—')}</b></span><span>Attending <b>Dr. Sarah Chen</b></span>`
     :'<span>No nutrition log yet</span>';
+  if(isSignedOff(p)&&p.signed_off_at){
+    const who=String(p.signed_off_by||'').replace(/^solana:/,''),short=who.length>12?`${who.slice(0,4)}…${who.slice(-4)}`:(who||'care team');
+    $('#nutrition-context').insertAdjacentHTML('afterbegin',`<span class="signed-note">${icon('check')} Signed off <b>${esc(new Date(p.signed_off_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</b> by <b title="${esc(who)}">${esc(short)}</b></span>`);
+  }
   const card=(key,iconName,title,value,unit,status,warn)=>`
     <button type="button" class="vital ${warn?'warning':''}" data-nutri="${key}" aria-label="View daily ${title} chart" ${last?'':'disabled'}>
       <div class="vital-label">${icon(iconName)} ${title}</div>

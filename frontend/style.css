@@ -347,6 +347,15 @@ h2 > span:not(.spark) {
 .res-reason { font-size: 10.5px; color: #6b6b6b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .res-reason em { font-style: normal; color: #9a9a9a; }
 .res-new { color: #c04f32; font-weight: 700; }
+.res-score.signed { background: #e8f3ec; color: #2f7a52; }
+.res-score.signed .icon { width: 15px; height: 15px; }
+.res-signed { color: #2f7a52; font-weight: 700; }
+.list-group.signed .list-group-head span { color: #2f7a52; }
+.badge.signed { background: #e8f3ec; color: #2f7a52; }
+#blink-btn.done { border-color: #bfdcc9; color: #2f7a52; background: #f2f9f4; }
+.signed-note { color: #2f7a52; }
+.signed-note .icon { width: 12px; height: 12px; }
+.chip.signed-chip { background: #e8f3ec; color: #2f7a52; border-color: #c8e3d2; }
 
 /* Roster Rows */
 .patient-row {
@@ -450,7 +459,8 @@ h2 > span:not(.spark) {
 }
 .patient-context {
   display: flex;
-  gap: 22px;
+  flex-wrap: wrap;
+  gap: 6px 22px;
   padding: 12px 22px;
   border-top: 1px solid #f3f3f3;
   border-bottom: 1px solid #f3f3f3;
@@ -459,6 +469,8 @@ h2 > span:not(.spark) {
   background: #fcfcfc;
 }
 .patient-context b { color: #3f3f3f; font-weight: 600; margin-left: 4px; }
+.patient-context > span { white-space: nowrap; }
+.patient-context .signed-note b { color: #2f7a52; }
 
 /* Section Labels */
 .section-label {
@@ -858,3 +870,5 @@ dialog::backdrop { background: rgba(40, 40, 40, 0.45); backdrop-filter: blur(2px
   .dashboard { grid-template-columns: 1fr; }
 }
 #vitals { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+.list-group-empty { padding: 8px 22px 10px; font-size: 11px; color: #aaaaaa; font-style: italic; }

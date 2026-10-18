@@ -68,8 +68,11 @@ export async function patients(){return (await pool.query(`SELECT p.id, p.name, 
 
 // Everything the detail panel needs for one resident: screening profile, latest score with reasons, alert.
 export async function resident(id){
- const {rows:[row]}=await pool.query(`SELECT p.id, p.name, p.age, p.sex, p.bed, p.screening, n.risk, n.details, n.hash, n.id AS prediction_id, a.id AS alert_id, a.status AS alert_status
-  FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id ${LATEST} WHERE p.id=$1 LIMIT 1`,[id]);
+ const {rows:[row]}=await pool.query(`SELECT p.id, p.name, p.age, p.sex, p.bed, p.screening, n.risk, n.details, n.hash, n.id AS prediction_id, a.id AS alert_id, a.status AS alert_status,
+  ack.created_at AS signed_off_at, ack.actor AS signed_off_by
+  FROM septisense.patients p JOIN septisense.encounters e ON e.patient_id=p.id ${LATEST}
+  LEFT JOIN LATERAL (SELECT created_at,actor FROM septisense.alert_events WHERE alert_id=a.id AND event_type='acknowledged' ORDER BY created_at DESC LIMIT 1) ack ON true
+  WHERE p.id=$1 LIMIT 1`,[id]);
  return row||null;
 }
 export async function audit(){return (await pool.query(`SELECT ev.created_at AS time, e.patient_id || ' alert ' || ev.event_type AS text, p.hash FROM septisense.alert_events ev JOIN septisense.alerts a ON a.id=ev.alert_id JOIN septisense.encounters e ON e.id=a.encounter_id JOIN septisense.predictions p ON p.id=a.prediction_id ORDER BY ev.created_at DESC LIMIT 100`)).rows}

@@ -123,13 +123,19 @@ export function scoreNutrition(history, profile) {
   }
   if (missed >= 2) add(1, 'missed', 'Missed meals', `${missed} meals refused or skipped in the last 2 days`);
   if (chewingDays) add(1, 'chewing', 'Chewing or swallowing difficulty', `Noted on ${chewingDays} of the last 7 days`);
+  // Screening model (ridge logistic regression on the resident's NHANES screening, see model.mjs): a fixed baseline
+  // that the daily care-log signs add to. 70%+ alone puts a resident on watch; 60–70% adds a point.
+  const model = profile?.screening_model, modelPct = model ? Math.round(model.probability * 100) : null;
+  const why = model?.factors?.length ? ` · ${model.factors.join(', ')}` : '';
+  if (modelPct !== null && modelPct >= 70) add(3, 'model', 'High screening risk (model)', `Model predicts ${modelPct}% malnutrition risk${why}`);
+  else if (modelPct !== null && modelPct >= 60) add(1, 'model', 'Elevated screening risk (model)', `Model predicts ${modelPct}% malnutrition risk${why}`);
 
   drivers.sort((a, b) => b.points - a.points);
   const points = drivers.reduce((sum, d) => sum + d.points, 0);
   const risk = Math.min(100, points * 10);
   return {
     risk, points, tier: risk >= 70 ? 'high' : risk >= 30 ? 'medium' : 'stable', drivers,
-    summary: {day: today, intake7: round(intake7), baseline: round(baseline), fluids3: round(fluids3), weight: latestWeight,
+    summary: {day: today, intake7: round(intake7), baseline: round(baseline), fluids3: round(fluids3), weight: latestWeight, modelRisk: modelPct,
       weightChangePct: round(weightChangePct, 1), bmi: round(bmi, 1), missed, chewingDays, latestNote, diet: profile?.diet ?? null},
   };
 }

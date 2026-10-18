@@ -62,8 +62,3 @@ export function screeningFromNhanes(row) {
   for (const [field, column] of Object.entries(NUMERIC)) s[field] = row[column] ?? null;
   return s;
 }
-
-// The file's MALNUTRITION_RISK_SCORE is a fixed formula of standardized BMI, arm circumference, calories and protein
-// (lower = better nourished). It is used only to decide how likely a resident's synthetic care logs are to decline,
-// never shown as a diagnosis. HAS_MALNUTRITION is a random draw and is ignored.
-export const baselineRisk = row => row.MALNUTRITION_PROBABILITY_SYNTHETIC ?? null;
