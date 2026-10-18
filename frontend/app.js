@@ -358,7 +358,7 @@ function renderNutrition(){
   const p=selected,rows=nutritionRows(),last=rows.at(-1),s=summary(p),flagged=new Set(drivers(p).map(d=>d.key));
   const weighed=[...rows].reverse().find(r=>r.weight_kg!==null);
   $('#nutrition-context').innerHTML=last
-    ?`<span>Monitoring <b>day ${last.day} of ${rows.length}</b></span><span>Last weighed <b>${weighed?`${fmt(weighed.weight_kg,1)} kg · day ${weighed.day}`:'—'}</b></span><span>Diet <b>${esc(profile(p).diet||'—')}</b></span><span>Attending <b>Dr. Sarah Chen</b></span>`
+    ?`<span>Monitoring <b>day ${last.day} of ${rows.length}</b></span><span>Last weighed <b>${weighed?`${fmt(weighed.weight_kg,1)} kg · day ${weighed.day}`:'—'}</b></span><span>Diet <b>${esc(profile(p).diet||'—')}</b></span><span>Attending <b>Dr. Jeremy Niu</b></span>`
     :'<span>No nutrition log yet</span>';
   if(isSignedOff(p)&&p.signed_off_at){
     const who=String(p.signed_off_by||'').replace(/^solana:/,''),short=who.length>12?`${who.slice(0,4)}…${who.slice(-4)}`:(who||'care team');

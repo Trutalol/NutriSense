@@ -6,7 +6,7 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "check": "node --check app.js",
-    "replay": "node replay.mjs",
+    "replay": "node nutrition-replay.mjs",
     "test": "node --test psv.test.mjs solana.test.mjs nutrition.test.mjs nhanes.test.mjs model.test.mjs",
     "generate": "node generate-nutrition.mjs",
     "replay-nutrition": "node nutrition-replay.mjs"
