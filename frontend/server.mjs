@@ -25,9 +25,9 @@ async function handleAction(req,res,route){
   const risk=prediction.risk===null?'malnutrition risk not scored':`malnutrition risk ${prediction.risk}/100`;
   const alert=prediction.alert_status==='open'?' Signing also acknowledges the open malnutrition alert.':'';
   const last=prediction.receipt?` Last signed by ${prediction.receipt.account.slice(0,4)}…${prediction.receipt.account.slice(-4)}.`:'';
-  return actionJson(res,200,{type:'action',icon,title:`Nutrition review · ${prediction.name}`,label:'Sign review',
+  return actionJson(res,200,{type:'action',icon,title:`Nutrition review · ${prediction.name}`,label:'Sign off',
    description:`Sign this resident's latest nutrition assessment (${risk}) on Solana ${CLUSTER}. The on-chain memo holds only the assessment ID and its SHA-256 hash, no resident details.${alert}${last}`,
-   links:{actions:[{type:'transaction',label:'Sign review on Solana',href}]}});
+   links:{actions:[{type:'transaction',label:'Sign off',href}]}});
  }
  if(route==='/api/actions/nutrition-review'&&req.method==='POST'){
   const b=await body(req);const payer=parsePublicKey(b.account);
@@ -41,7 +41,7 @@ async function handleAction(req,res,route){
   const verified=await verifyMemoTransaction(b.signature,b.account,memo);
   if(!verified)return actionJson(res,504,{message:'The transaction was sent but not confirmed on devnet yet. Try again in a moment.'});
   const {acknowledged}=await recordBlinkReceipt(prediction,{signature:b.signature,account:b.account,memo,cluster:CLUSTER,slot:verified.slot});
-  return actionJson(res,200,{type:'completed',icon,title:'Review signed on Solana',label:'Signed',
+  return actionJson(res,200,{type:'completed',icon,title:'Signed off',label:'Signed off',
    description:`Verified on ${CLUSTER} in slot ${verified.slot}.${acknowledged?' The malnutrition alert is now acknowledged.':''}`,
    signature:b.signature,explorer:explorerUrl(b.signature),acknowledged});
  }

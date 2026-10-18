@@ -348,6 +348,8 @@ function showSbarModal(){
   if(!selected)return;
   const p=selected,loc=residentLocation(p),s=summary(p),ds=drivers(p),prof=profile(p);
   const steps=[...new Set(ds.map(d=>d.key))].filter(k=>CARE_STEPS[k]).map(k=>CARE_STEPS[k][1]);
+  // On-track residents only need routine monitoring; anyone on watch or higher also gets a physician review.
+  const recommendations=steps.length?[...steps,'Physician review and sign-off.']:['Continue routine monitoring: record meals and fluids each shift and weigh weekly.'];
   const sbarText=`SBAR NUTRITION HANDOFF · NUTRISENSE
 Facility: Maplewood Senior Living
 Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
@@ -367,8 +369,7 @@ Daily meal, fluid and weight records over ${s.day??'—'} days. Usual meal intak
 - Warning signs: ${ds.length?ds.map(d=>`${d.label} (${d.detail})`).join('; '):'none'}
 ${s.latestNote?`- Latest CNA note: "${s.latestNote}"\n`:''}
 [RECOMMENDATION]
-${(steps.length?steps:['Continue routine monitoring.']).map((t,i)=>`${i+1}. ${t}`).join('\n')}
-${steps.length+1}. Physician review and sign-off via Solana Blink.`;
+${recommendations.map((t,i)=>`${i+1}. ${t}`).join('\n')}`;
   modal('SBAR Nutrition Handoff',`
     <div class="sbar-modal-content">
       <div class="sbar-badge-row">
@@ -409,14 +410,14 @@ async function review(){
   const current=selected;
   if(!current?.prediction_id)return;
   const href=`/api/actions/nutrition-review?prediction=${current.prediction_id}`;
-  modal('Solana Blink','<p>Loading action…</p>');
+  modal('Sign off','<p>Loading…</p>');
   let action;
   try{action=await actionFetch(href);}
   catch(e){$('#modal-body').innerHTML=`<p>${esc(e.message)}</p>`;return;}
   $('#modal-body').innerHTML=`
     <div class="blink-preview-card">
       <div class="blink-header">
-        <span class="blink-logo">${icon('zap')} SOLANA BLINK · DEVNET</span>
+        <span class="blink-logo">${icon('check')} SIGN-OFF · RECORDED ON SOLANA</span>
         <span class="badge ${tier(current)}">${esc(label(current))}</span>
       </div>
       <div class="blink-card">
@@ -424,8 +425,8 @@ async function review(){
         <div><h3>${esc(action.title)}</h3><p>${esc(action.description)}</p></div>
       </div>
       <div class="blink-btn-row">
-        ${action.links.actions.map((a,i)=>`<button class="button dark" data-blink-action="${i}">${icon('zap')} ${esc(a.label)}</button>`).join('')}
-        <button class="button" id="copy-blink-link">Copy Blink link</button>
+        ${action.links.actions.map((a,i)=>`<button class="button dark" data-blink-action="${i}">${icon('check')} ${esc(a.label)}</button>`).join('')}
+        <button class="button" id="copy-blink-link">Copy sign-off link</button>
       </div>
       <div class="blink-status" id="blink-status" role="status" hidden></div>
       <p class="blink-footnote"><small>Needs a browser wallet such as Phantom set to Devnet, with a little devnet SOL for the fee.</small></p>
@@ -435,7 +436,7 @@ async function review(){
   });
   $('#copy-blink-link').onclick=()=>{
     navigator.clipboard.writeText(`solana-action:${location.origin}${href}`)
-      .then(()=>notify('Blink link copied'))
+      .then(()=>notify('Sign-off link copied'))
       .catch(()=>notify('Unable to access clipboard'));
   };
 }
@@ -467,7 +468,7 @@ async function signAction(actionHref,button){
     status('Waiting for devnet confirmation…');
     const done=await actionFetch(tx.links.next.href,{account,signature});
     status(`${icon('check')} ${esc(done.description)} <a href="${esc(done.explorer)}" target="_blank" rel="noopener">View on Solana Explorer ↗</a>`,'success');
-    notify(done.acknowledged?'Review signed and alert acknowledged':'Review signed on Solana devnet');
+    notify(done.acknowledged?'Signed off and alert acknowledged':'Signed off');
     await refresh();
   }catch(e){
     status(esc(e?.message||'Signing was cancelled'),'error');
